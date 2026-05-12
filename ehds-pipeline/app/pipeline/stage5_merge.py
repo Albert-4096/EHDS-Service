@@ -1,6 +1,7 @@
 from datetime import date
+from app.pipeline.stage2_classify import DocumentType
 from app.models.internal import (
-    DocumentType, StructuredFields, LabResults, AdminCheckboxes,
+    StructuredFields, LabResults, AdminCheckboxes,
     AppointmentBlock, EpicrizaExtracted, MedicationEntry, OncologyFields,
     TransfusionRecord, MergedRecord
 )

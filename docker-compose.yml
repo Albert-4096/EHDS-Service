@@ -18,6 +18,8 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - HAPI_FHIR_BASE_URL=http://hapi-fhir:8080/fhir
       - POSTGRES_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ehds_db
+    volumes:
+      - api-logs:/app/logs
     networks:
       - ehds-network
     depends_on:
@@ -51,3 +53,4 @@ networks:
 volumes:
   hapi-data:
   postgres-data:
+  api-logs:
