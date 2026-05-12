@@ -1,0 +1,53 @@
+services:
+  frontend:
+    build:
+      context: ./ehds-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    networks:
+      - ehds-network
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ./ehds-pipeline
+      dockerfile: Dockerfile
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - HAPI_FHIR_BASE_URL=http://hapi-fhir:8080/fhir
+      - POSTGRES_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ehds_db
+    networks:
+      - ehds-network
+    depends_on:
+      - hapi-fhir
+      - postgres
+
+  hapi-fhir:
+    image: hapiproject/hapi:latest
+    environment:
+      - HAPI_FHIR_SERVER_ADDRESS=http://hapi-fhir:8080/fhir
+    volumes:
+      - hapi-data:/var/lib/hapi
+    networks:
+      - ehds-network
+
+  postgres:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=ehds_db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - ehds-network
+
+networks:
+  ehds-network:
+    driver: bridge
+
+volumes:
+  hapi-data:
+  postgres-data:
