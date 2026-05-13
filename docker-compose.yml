@@ -4,7 +4,7 @@ services:
       context: ./ehds-frontend
       dockerfile: Dockerfile
     ports:
-      - "80:80"
+      - "8018:80"
     networks:
       - ehds-network
     depends_on:
