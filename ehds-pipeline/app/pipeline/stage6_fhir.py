@@ -93,7 +93,7 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
             period.start = record.structured.data_internarii
         if record.structured.data_externarii:
             period.end = record.structured.data_externarii
-        encounter.period = period
+        encounter.actualPeriod = period  # R5: was 'period' in R4
 
     resources.append(encounter)
     encounter_ref = Reference(reference=f"Encounter/{encounter.id}")
@@ -102,17 +102,20 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
     # 3. Conditions
     # ------------------------------------------------------------------
     def create_condition(diag, rank: int = 1) -> Condition:
-        cond = Condition(id=generate_uuid(), subject=patient_ref)
-        cond.encounter = encounter_ref
-        cond.clinicalStatus = _codeable_concept(
-            "http://terminology.hl7.org/CodeSystem/condition-clinical", "active"
-        )
         code_concept = CodeableConcept(text=diag.denumire)
         if diag.cod_cim10:
             code_concept.coding = [
                 _coding("http://hl7.org/fhir/sid/icd-10", diag.cod_cim10)
             ]
-        cond.code = code_concept
+        cond = Condition(
+            id=generate_uuid(),
+            subject=patient_ref,
+            clinicalStatus=_codeable_concept(   # required in R5 constructor
+                "http://terminology.hl7.org/CodeSystem/condition-clinical", "active"
+            ),
+            code=code_concept,
+        )
+        cond.encounter = encounter_ref
         return cond
 
     if record.structured.diagnostic_principal:
@@ -133,18 +136,22 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
     # ------------------------------------------------------------------
     if record.labs:
         def create_lab_obs(lab: LabValue, category_code: str) -> Observation:
-            obs = Observation(id=generate_uuid(), status="final", subject=patient_ref)
-            obs.encounter = encounter_ref
-            obs.category = [
-                _codeable_concept(
-                    "http://terminology.hl7.org/CodeSystem/observation-category",
-                    category_code,
-                )
-            ]
             code_concept = CodeableConcept(text=lab.test_name)
             if lab.loinc_code:
                 code_concept.coding = [_coding("http://loinc.org", lab.loinc_code)]
-            obs.code = code_concept
+            obs = Observation(
+                id=generate_uuid(),
+                status="final",
+                subject=patient_ref,
+                code=code_concept,  # required in R5 constructor
+                category=[
+                    _codeable_concept(
+                        "http://terminology.hl7.org/CodeSystem/observation-category",
+                        category_code,
+                    )
+                ],
+            )
+            obs.encounter = encounter_ref
 
             if lab.value_numeric is not None:
                 quantity = Quantity(value=lab.value_numeric)
@@ -174,11 +181,15 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
     # ------------------------------------------------------------------
     if record.oncology and record.oncology.tnm:
         tnm = record.oncology.tnm
-        obs = Observation(id=generate_uuid(), status="final", subject=patient_ref)
-        obs.encounter = encounter_ref
-        obs.code = _codeable_concept(
-            "http://loinc.org", "21908-9", display="Stage group.clinical Cancer"
+        obs = Observation(
+            id=generate_uuid(),
+            status="final",
+            subject=patient_ref,
+            code=_codeable_concept(   # required in R5 constructor
+                "http://loinc.org", "21908-9", display="Stage group.clinical Cancer"
+            ),
         )
+        obs.encounter = encounter_ref
         if tnm.stage_group:
             obs.valueString = tnm.stage_group
         resources.append(obs)

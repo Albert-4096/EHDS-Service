@@ -27,9 +27,10 @@ DOC_BIS_ANCHORS = [
     "Calea de transmitere"
 ]
 
-def _build_diacritic_regex(anchor: str) -> str:
+def _build_diacritic_core(anchor: str) -> str:
     """
-    Builds a case-insensitive regex for an anchor string that tolerates missing diacritics.
+    Builds the core (inner) diacritic-tolerant pattern for an anchor string.
+    Does NOT include start/end anchors — those are added at usage sites.
     """
     mapping = {
         'ă': '[ăa]', 'a': '[aăâ]', 'â': '[âa]',
@@ -37,21 +38,22 @@ def _build_diacritic_regex(anchor: str) -> str:
         'ș': '[șs]', 's': '[sș]',
         'ț': '[țt]', 't': '[tț]'
     }
-    
-    # We map back and forth to ensure variations are covered if the input anchor is simple ASCII
-    # To keep it simple: build character classes for any char that has a diacritic equivalent.
+
     pattern = ""
     for char in anchor:
         c_lower = char.lower()
         if c_lower in mapping:
-            # Case insensitive handle is better with (?i) flag later, just insert the char class
             pattern += mapping[c_lower]
         else:
             pattern += re.escape(char)
-            
-    # Anchor typically appears at the start of a line or surrounded by spaces/colons
-    # We look for the anchor as a standalone phrase, often followed by colon or newline
-    return r"^\s*" + pattern + r"[:\s]*$"
+    return pattern
+
+
+def _build_diacritic_regex(anchor: str) -> str:
+    """
+    Builds a full line-matching regex for an anchor (start/end anchors included).
+    """
+    return r"^\s*" + _build_diacritic_core(anchor) + r"[:\s]*$"
 
 def split_zones(text: str, doc_type: DocumentType) -> dict[str, str]:
     """
@@ -105,7 +107,7 @@ def split_zones(text: str, doc_type: DocumentType) -> dict[str, str]:
                     # Since headers might be part of a line: `Diagnostic: NSTEMI`
                     # We should adjust regex to match the start of the line and capture the rest if needed, 
                     # but the prompt implies standard sectioning. Let's do a loose prefix match using the diacritic regex.
-                    prefix_regex = re.compile(r"^\s*" + _build_diacritic_regex(a)[4:-6] + r"[:\s]*(.*)$", re.IGNORECASE)
+                    prefix_regex = re.compile(r"^\s*" + _build_diacritic_core(a) + r"[:\s]*(.*)$", re.IGNORECASE)
                     m = prefix_regex.match(line_clean)
                     if m:
                         matched_anchor = a

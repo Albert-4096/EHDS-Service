@@ -31,6 +31,9 @@ def assemble_bundle(resources: List[DomainResource], doc_type: DocumentType, med
         elif isinstance(res, Encounter):
             encounter_ref = Reference(reference=f"Encounter/{res.id}")
             
+    # Author (required in R5 – must be in constructor)
+    author_ref = [Reference(display=medic_name)] if medic_name else [Reference(display="Unknown Physician")]
+
     # Create Composition
     composition = Composition(
         id=generate_uuid(),
@@ -39,20 +42,15 @@ def assemble_bundle(resources: List[DomainResource], doc_type: DocumentType, med
             coding=[Coding(system="http://loinc.org", code="18842-5", display="Discharge Summary")]
         ),
         date=datetime.now(timezone.utc),
-        title=f"Romanian Hospital Discharge Report - {doc_type.value}"
+        title=f"Romanian Hospital Discharge Report - {doc_type.value}",
+        author=author_ref,  # required in R5 constructor
     )
-    
+
     if patient_ref:
-        composition.subject = patient_ref
+        composition.subject = [patient_ref]  # R5: subject is now List[Reference]
     if encounter_ref:
         composition.encounter = encounter_ref
-        
-    # Author
-    if medic_name:
-        composition.author = [Reference(display=medic_name)]
-    else:
-        composition.author = [Reference(display="Unknown Physician")]
-        
+
     # Build Bundle Entries
     entries = []
     
