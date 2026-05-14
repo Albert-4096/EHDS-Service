@@ -7,8 +7,10 @@ services:
       - "8018:80"
     networks:
       - ehds-network
+    restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   api:
     build:
@@ -17,14 +19,22 @@ services:
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - HAPI_FHIR_BASE_URL=http://hapi-fhir:8080/fhir
-      - POSTGRES_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ehds_db
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ehds_db
     volumes:
       - api-logs:/app/logs
     networks:
       - ehds-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     depends_on:
-      - hapi-fhir
-      - postgres
+      hapi-fhir:
+        condition: service_started
+      postgres:
+        condition: service_started
 
   hapi-fhir:
     image: hapiproject/hapi:latest
@@ -34,6 +44,12 @@ services:
       - hapi-data:/var/lib/hapi
     networks:
       - ehds-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/fhir/metadata"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
 
   postgres:
     image: postgres:16
@@ -45,6 +61,12 @@ services:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - ehds-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
   ehds-network:
