@@ -14,8 +14,8 @@ from fhir.resources.reference import Reference
 from fhir.resources.domainresource import DomainResource
 from fhir.resources.extension import Extension
 from fhir.resources.procedure import Procedure
-from fhir.resources.device import Device, DeviceDeviceName
-from fhir.resources.deviceusestatement import DeviceUseStatement
+from fhir.resources.device import Device, DeviceName
+from fhir.resources.deviceusage import DeviceUsage
 from fhir.resources.adverseevent import AdverseEvent
 from datetime import datetime, timezone
 
@@ -99,11 +99,13 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
     encounter = Encounter(
         id=generate_uuid(),
         status="finished",
-        class_fhir=_coding(
-            "http://terminology.hl7.org/CodeSystem/v3-ActCode",
-            encounter_class_code,
-            display=encounter_class_display,
-        )
+        class_fhir=[
+            _codeable_concept(
+                "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+                encounter_class_code,
+                display=encounter_class_display,
+            )
+        ]
     )
     encounter.subject = patient_ref
 
@@ -113,7 +115,7 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
             period.start = record.structured.data_internarii
         if record.structured.data_externarii:
             period.end = record.structured.data_externarii
-        encounter.period = period  # R4 uses period, not actualPeriod
+        encounter.actualPeriod = period  # R5 uses actualPeriod
 
     resources.append(encounter)
     encounter_ref = Reference(reference=f"Encounter/{encounter.id}")
@@ -167,10 +169,11 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
         if is_adverse_event(diag.denumire):
             ae = AdverseEvent(
                 id=generate_uuid(),
+                status="completed", # R5 status
                 actuality="actual",
                 subject=patient_ref,
                 encounter=encounter_ref,
-                event=CodeableConcept(text=diag.denumire)
+                code=CodeableConcept(text=diag.denumire)
             )
             resources.append(ae)
         else:
@@ -249,11 +252,11 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
 
         mstmt = MedicationStatement(
             id=generate_uuid(),
-            status="active", # R4 doesn't have 'recorded'
+            status="recorded",
             subject=patient_ref,
-            medicationCodeableConcept=concept, # R4: medicationCodeableConcept
+            medication=concept,
         )
-        mstmt.context = encounter_ref # R4: context instead of encounter
+        mstmt.encounter = encounter_ref
 
         dosage_text = f"{med.doza or ''} {med.frecventa or ''} {med.durata or ''}".strip()
         if dosage_text:
@@ -282,13 +285,13 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
 
         for imp in record.epicriza.implants:
             dev = Device(id=generate_uuid())
-            dev.deviceName = [DeviceDeviceName(name=imp.name, type="user-friendly-name")]
+            dev.deviceName = [DeviceName(value=imp.name, type="user-friendly-name")]
             resources.append(dev)
 
-            dus = DeviceUseStatement(
+            dus = DeviceUsage(
                 id=generate_uuid(),
                 status="active",
-                subject=patient_ref,
+                patient=patient_ref,
                 device=Reference(reference=f"Device/{dev.id}")
             )
             if imp.body_site:
@@ -298,10 +301,11 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
         for ae_text in record.epicriza.adverse_events:
             ae = AdverseEvent(
                 id=generate_uuid(),
+                status="completed",
                 actuality="actual",
                 subject=patient_ref,
                 encounter=encounter_ref,
-                event=CodeableConcept(text=ae_text)
+                code=CodeableConcept(text=ae_text)
             )
             resources.append(ae)
 

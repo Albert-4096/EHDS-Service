@@ -10,7 +10,7 @@ dependencies = [
     "pydantic-settings",
     "openai",
     "instructor",
-    "fhir.resources>=7.0",
+    "fhir.resources>=8.0.0",
     "pdfplumber",
     "pymupdf",
     "pytesseract",
