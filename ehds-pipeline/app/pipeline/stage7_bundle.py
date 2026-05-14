@@ -10,11 +10,12 @@ from fhir.resources.codeableconcept import CodeableConcept
 from fhir.resources.coding import Coding
 from datetime import datetime, timezone
 from app.pipeline.stage2_classify import DocumentType
+from app.pipeline.stage9_provenance import build_provenance
 
 def generate_uuid() -> str:
     return str(uuid.uuid4())
 
-def assemble_bundle(resources: List[DomainResource], doc_type: DocumentType, medic_name: str | None = None) -> Bundle:
+def assemble_bundle(resources: List[DomainResource], doc_type: DocumentType, medic_name: str | None = None, file_hash: str | None = None) -> Bundle:
     """
     Assembles a FHIR Bundle of type 'document' (EEHRxF compliant).
     The first resource must be a Composition.
@@ -35,14 +36,23 @@ def assemble_bundle(resources: List[DomainResource], doc_type: DocumentType, med
     author_ref = [Reference(display=medic_name)] if medic_name else [Reference(display="Unknown Physician")]
 
     # Create Composition
+    loinc_code = "34105-7"
+    loinc_display = "Hospital discharge summary"
+    title_prefix = "Romanian Hospital Discharge Report"
+    
+    if doc_type == DocumentType.OUTPATIENT_MEDICAL_LETTER:
+        loinc_code = "34133-9"
+        loinc_display = "Summary of episode note"
+        title_prefix = "Romanian Outpatient Medical Letter"
+
     composition = Composition(
         id=generate_uuid(),
         status="final",
         type=CodeableConcept(
-            coding=[Coding(system="http://loinc.org", code="18842-5", display="Discharge Summary")]
+            coding=[Coding(system="http://loinc.org", code=loinc_code, display=loinc_display)]
         ),
         date=datetime.now(timezone.utc),
-        title=f"Romanian Hospital Discharge Report - {doc_type.value}",
+        title=f"{title_prefix} - {doc_type.value}",
         author=author_ref,  # required in R5 constructor
     )
 
@@ -60,6 +70,14 @@ def assemble_bundle(resources: List[DomainResource], doc_type: DocumentType, med
     comp_entry.resource = composition
     entries.append(comp_entry)
     
+    # Append Provenance if file hash is provided
+    if file_hash:
+        prov = build_provenance(f"urn:uuid:{composition.id}", file_hash)
+        prov_entry = BundleEntry()
+        prov_entry.fullUrl = f"urn:uuid:{prov.id}"
+        prov_entry.resource = prov
+        entries.append(prov_entry)
+        
     for res in resources:
         entry = BundleEntry()
         entry.fullUrl = f"urn:uuid:{res.id}"

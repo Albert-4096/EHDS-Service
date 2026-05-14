@@ -1,9 +1,8 @@
 from enum import Enum
 
 class DocumentType(str, Enum):
-    DOC_HDR = "DOC_HDR"
-    DOC_BIS = "DOC_BIS"
-    DOC_SM = "DOC_SM"
+    HOSPITAL_DISCHARGE_REPORT = "Hospital_Discharge_Report"
+    OUTPATIENT_MEDICAL_LETTER = "Outpatient_Medical_Letter"
     UNKNOWN = "UNKNOWN"
 
 class DocumentTypeError(Exception):
@@ -18,17 +17,13 @@ def classify_document(text: str) -> DocumentType:
     lines = text.splitlines()
     header_text = "\n".join(lines[:30]).lower()
 
-    # Rule 1: If text contains "BILET DE IESIRE" or "FO:" near the header -> DOC_BIS
-    if "bilet de iesire" in header_text or "fo:" in header_text:
-        return DocumentType.DOC_BIS
+    # Rule 1: "bilet de iesire", "bilet de externare", or "fo:" -> HOSPITAL_DISCHARGE_REPORT
+    if "bilet de iesire" in header_text or "bilet de externare" in header_text or "fo:" in header_text:
+        return DocumentType.HOSPITAL_DISCHARGE_REPORT
         
-    # Rule 2: Else if text contains "BILET DE EXTERNARE" -> DOC_HDR
-    if "bilet de externare" in header_text:
-        return DocumentType.DOC_HDR
-        
-    # Rule 3: Else if text contains "SCRISOARE MEDICALA" without "BILET DE IESIRE" -> DOC_SM
+    # Rule 2: "scrisoare medicala" -> OUTPATIENT_MEDICAL_LETTER
     if "scrisoare medicala" in header_text:
-        return DocumentType.DOC_SM
+        return DocumentType.OUTPATIENT_MEDICAL_LETTER
         
-    # Rule 4: Else -> UNKNOWN -> raise DocumentTypeError
+    # Rule 3: Else -> UNKNOWN -> raise DocumentTypeError
     raise DocumentTypeError(f"Unknown document type. Header text was:\n{header_text}")

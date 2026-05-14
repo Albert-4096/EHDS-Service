@@ -37,7 +37,7 @@ def merge_and_validate(
             all_warnings.append(warn_msg)
             
     # HP-12: Cross-validation
-    if doc_type == DocumentType.DOC_BIS and structured.data_externarii is None:
+    if doc_type == DocumentType.HOSPITAL_DISCHARGE_REPORT and structured.data_externarii is None:
         if appointment and appointment.datetime_parsed:
             from datetime import timedelta
             structured.data_externarii = appointment.datetime_parsed - timedelta(days=1)

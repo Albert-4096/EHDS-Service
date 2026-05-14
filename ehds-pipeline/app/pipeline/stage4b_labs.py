@@ -4,7 +4,7 @@ from app.models.internal import LabResults, LabValue
 from app.utils.numeric import normalise_romanian_decimal
 from app.terminology.loinc_map import lab_to_loinc
 
-REGEX_SUPERSCRIPT = re.compile(r"(\d+\.?\d*)\s+(10)(\d{1,2})/([Ll])")
+REGEX_SUPERSCRIPT = re.compile(r"(\d+\.?\d*)\s*(?:[x×X])?\s*(10)(\d{1,2})/([Ll])")
 
 UCUM_MAPPING = {
     "× 10^9/L": "10*9/L",

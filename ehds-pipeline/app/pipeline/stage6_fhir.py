@@ -7,15 +7,20 @@ from fhir.resources.observation import Observation
 from fhir.resources.medicationstatement import MedicationStatement
 from fhir.resources.identifier import Identifier
 from fhir.resources.codeableconcept import CodeableConcept
-from fhir.resources.codeablereference import CodeableReference
 from fhir.resources.coding import Coding
 from fhir.resources.period import Period
 from fhir.resources.quantity import Quantity
 from fhir.resources.reference import Reference
 from fhir.resources.domainresource import DomainResource
+from fhir.resources.extension import Extension
+from fhir.resources.procedure import Procedure
+from fhir.resources.device import Device, DeviceDeviceName
+from fhir.resources.deviceusestatement import DeviceUseStatement
+from fhir.resources.adverseevent import AdverseEvent
 from datetime import datetime, timezone
 
 from app.models.internal import MergedRecord, LabValue
+from app.terminology.mappings import CIM10_TO_SNOMED
 
 def generate_uuid() -> str:
     return str(uuid.uuid4())
@@ -38,6 +43,12 @@ def _codeable_concept(system: str, code: str, text: str | None = None, display: 
         kwargs["text"] = text
     return CodeableConcept(**kwargs)
 
+def _data_absent_reason() -> Extension:
+    return Extension(
+        url="http://hl7.org/fhir/StructureDefinition/data-absent-reason",
+        valueCode="unknown"
+    )
+
 # ---------------------------------------------------------------------------
 # Main builder
 # ---------------------------------------------------------------------------
@@ -59,31 +70,40 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
 
     if record.structured.dob_from_cnp:
         patient.birthDate = record.structured.dob_from_cnp
+    else:
+        patient.extension = [_data_absent_reason()] # R-NULL compliance
 
     sex = record.structured.sex_from_cnp or record.structured.sex_explicit
     if sex:
         sex_map = {"M": "male", "F": "female"}
         patient.gender = sex_map.get(sex.upper(), "unknown")
+    else:
+        # Pydantic validation for fhir.resources might not allow extension on gender directly without _gender, 
+        # so we set it to 'unknown' which is standard in FHIR.
+        patient.gender = "unknown"
 
     resources.append(patient)
     patient_ref = Reference(reference=f"Patient/{patient.id}")
 
     # ------------------------------------------------------------------
-    # 2. Encounter  (fhir.resources v8 = FHIR R5)
-    #    R5: Encounter.class  is list[Coding]  (was class_fhir: Coding in R4)
+    # 2. Encounter  (FHIR R4)
     # ------------------------------------------------------------------
+    from app.pipeline.stage2_classify import DocumentType
+
+    encounter_class_code = "IMP"
+    encounter_class_display = "inpatient encounter"
+    if record.doc_type == DocumentType.OUTPATIENT_MEDICAL_LETTER.value:
+        encounter_class_code = "AMB"
+        encounter_class_display = "ambulatory"
+
     encounter = Encounter(
         id=generate_uuid(),
         status="finished",
-        **{
-            "class": [
-                _codeable_concept(
-                    "http://terminology.hl7.org/CodeSystem/v3-ActCode",
-                    "IMP",
-                    display="inpatient encounter",
-                )
-            ]
-        },
+        class_fhir=_coding(
+            "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            encounter_class_code,
+            display=encounter_class_display,
+        )
     )
     encounter.subject = patient_ref
 
@@ -93,7 +113,7 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
             period.start = record.structured.data_internarii
         if record.structured.data_externarii:
             period.end = record.structured.data_externarii
-        encounter.actualPeriod = period  # R5: was 'period' in R4
+        encounter.period = period  # R4 uses period, not actualPeriod
 
     resources.append(encounter)
     encounter_ref = Reference(reference=f"Encounter/{encounter.id}")
@@ -103,18 +123,27 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
     # ------------------------------------------------------------------
     def create_condition(diag, rank: int = 1) -> Condition:
         code_concept = CodeableConcept(text=diag.denumire)
+        codings = []
+        
         if diag.cod_cim10:
-            code_concept.coding = [
-                _coding("http://hl7.org/fhir/sid/icd-10", diag.cod_cim10)
-            ]
+            # R-DUAL compliance: CIM-10 + SNOMED CT
+            snomed_mapping = CIM10_TO_SNOMED.get(diag.cod_cim10)
+            if snomed_mapping:
+                codings.append(_coding("http://snomed.info/sct", snomed_mapping["code"], snomed_mapping["display"]))
+            # Add CIM-10
+            codings.append(_coding("http://hl7.org/fhir/sid/icd-10", diag.cod_cim10))
+            
+        if codings:
+            code_concept.coding = codings
+            
         cond = Condition(
             id=generate_uuid(),
             subject=patient_ref,
-            clinicalStatus=_codeable_concept(   # required in R5 constructor
+            clinicalStatus=_codeable_concept(
                 "http://terminology.hl7.org/CodeSystem/condition-clinical", "active"
-            ),
-            code=code_concept,
+            )
         )
+        cond.code = code_concept
         cond.encounter = encounter_ref
         return cond
 
@@ -128,8 +157,24 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
         ]
         resources.append(cond_primary)
 
+    adverse_keywords = ["toxicitate", "degradare", "hipofizita autoimuna"]
+    
+    def is_adverse_event(diag_name: str) -> bool:
+        lower_name = diag_name.lower()
+        return any(kw in lower_name for kw in adverse_keywords)
+
     for diag in record.structured.diagnostice_secundare:
-        resources.append(create_condition(diag))
+        if is_adverse_event(diag.denumire):
+            ae = AdverseEvent(
+                id=generate_uuid(),
+                actuality="actual",
+                subject=patient_ref,
+                encounter=encounter_ref,
+                event=CodeableConcept(text=diag.denumire)
+            )
+            resources.append(ae)
+        else:
+            resources.append(create_condition(diag))
 
     # ------------------------------------------------------------------
     # 4. Observations (Labs)
@@ -143,7 +188,6 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
                 id=generate_uuid(),
                 status="final",
                 subject=patient_ref,
-                code=code_concept,  # required in R5 constructor
                 category=[
                     _codeable_concept(
                         "http://terminology.hl7.org/CodeSystem/observation-category",
@@ -151,6 +195,7 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
                     )
                 ],
             )
+            obs.code = code_concept
             obs.encounter = encounter_ref
 
             if lab.value_numeric is not None:
@@ -184,21 +229,16 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
         obs = Observation(
             id=generate_uuid(),
             status="final",
-            subject=patient_ref,
-            code=_codeable_concept(   # required in R5 constructor
-                "http://loinc.org", "21908-9", display="Stage group.clinical Cancer"
-            ),
+            subject=patient_ref
         )
+        obs.code = _codeable_concept("http://loinc.org", "21908-9", display="Stage group.clinical Cancer")
         obs.encounter = encounter_ref
         if tnm.stage_group:
             obs.valueString = tnm.stage_group
         resources.append(obs)
 
     # ------------------------------------------------------------------
-    # 6. MedicationStatement  (fhir.resources v8 = FHIR R5)
-    #    R5: medication is CodeableReference  (was medicationCodeableConcept in R4)
-    #        context -> encounter
-    #        status "active" -> "recorded"
+    # 6. MedicationStatement (FHIR R4)
     # ------------------------------------------------------------------
     for med in record.medications:
         concept = CodeableConcept(text=med.medicament)
@@ -209,11 +249,11 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
 
         mstmt = MedicationStatement(
             id=generate_uuid(),
-            status="recorded",
+            status="active", # R4 doesn't have 'recorded'
             subject=patient_ref,
-            medication=CodeableReference(concept=concept),
+            medicationCodeableConcept=concept, # R4: medicationCodeableConcept
         )
-        mstmt.encounter = encounter_ref
+        mstmt.context = encounter_ref # R4: context instead of encounter
 
         dosage_text = f"{med.doza or ''} {med.frecventa or ''} {med.durata or ''}".strip()
         if dosage_text:
@@ -221,5 +261,48 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
             mstmt.dosage = [Dosage(text=dosage_text)]
 
         resources.append(mstmt)
+
+    # ------------------------------------------------------------------
+    # 7. Procedures, Devices, and extra Adverse Events
+    # ------------------------------------------------------------------
+    if record.epicriza:
+        for proc in record.epicriza.procedures:
+            p = Procedure(
+                id=generate_uuid(),
+                status="completed",
+                subject=patient_ref,
+                encounter=encounter_ref,
+                code=CodeableConcept(text=proc.name)
+            )
+            if proc.date:
+                p.performedDateTime = proc.date
+            if proc.body_site:
+                p.bodySite = [CodeableConcept(text=proc.body_site)]
+            resources.append(p)
+
+        for imp in record.epicriza.implants:
+            dev = Device(id=generate_uuid())
+            dev.deviceName = [DeviceDeviceName(name=imp.name, type="user-friendly-name")]
+            resources.append(dev)
+
+            dus = DeviceUseStatement(
+                id=generate_uuid(),
+                status="active",
+                subject=patient_ref,
+                device=Reference(reference=f"Device/{dev.id}")
+            )
+            if imp.body_site:
+                dus.bodySite = CodeableConcept(text=imp.body_site)
+            resources.append(dus)
+
+        for ae_text in record.epicriza.adverse_events:
+            ae = AdverseEvent(
+                id=generate_uuid(),
+                actuality="actual",
+                subject=patient_ref,
+                encounter=encounter_ref,
+                event=CodeableConcept(text=ae_text)
+            )
+            resources.append(ae)
 
     return resources

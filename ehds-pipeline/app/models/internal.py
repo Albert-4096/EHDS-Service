@@ -103,6 +103,15 @@ class StructuredFields(BaseModel):
     confidence_score: float = 0.0
     parsing_warnings: list[str] = Field(default_factory=list)
 
+class ProcedureEntry(BaseModel):
+    name: str
+    date: Optional[date] = None
+    body_site: Optional[str] = None
+    
+class DeviceEntry(BaseModel):
+    name: str
+    body_site: Optional[str] = None
+
 class EpicrizaExtracted(BaseModel):
     # current visit only (HP-12)
     motive_internare: list[str] = Field(default_factory=list)
@@ -116,6 +125,9 @@ class EpicrizaExtracted(BaseModel):
     history_timeline: list[dict] = Field(default_factory=list)   # [{date, event_type, description}]
     imaging_results: list[ImagingResult] = Field(default_factory=list)  # HP-18
     administered_in_hospital: list[str] = Field(default_factory=list)
+    procedures: list[ProcedureEntry] = Field(default_factory=list)
+    implants: list[DeviceEntry] = Field(default_factory=list)
+    adverse_events: list[str] = Field(default_factory=list)
     oncology_raw: Optional[dict] = Field(default_factory=dict)  # From LLM extraction
 
 
@@ -127,6 +139,8 @@ class MedicationEntry(BaseModel):
     atc_code: Optional[str] = None
     dose_is_total: bool = False    # HP-10: "DT" suffix
     raw: str
+
+from pydantic import model_validator
 
 class MergedRecord(BaseModel):
     doc_type: str
@@ -141,9 +155,25 @@ class MergedRecord(BaseModel):
     overall_confidence: float = 0.0
     all_warnings: list[str] = Field(default_factory=list)
 
+    @model_validator(mode='after')
+    def validate_ehds_pillars(self) -> 'MergedRecord':
+        # Late import to avoid circular dependency
+        from app.pipeline.stage2_classify import DocumentType
+        
+        if self.doc_type == DocumentType.HOSPITAL_DISCHARGE_REPORT.value:
+            if not self.structured.data_internarii or not self.structured.data_externarii:
+                raise ValueError("HOSPITAL_DISCHARGE_REPORT strictly requires Data Internarii (period.start) and Data Externarii (period.end).")
+        elif self.doc_type == DocumentType.OUTPATIENT_MEDICAL_LETTER.value:
+            if not self.structured.medic:
+                raise ValueError("OUTPATIENT_MEDICAL_LETTER strictly requires a target recipient (Practitioner / Family Doctor).")
+            if not self.medications:
+                raise ValueError("OUTPATIENT_MEDICAL_LETTER strictly requires recommended ambulatory treatment (MedicationRequest).")
+        return self
+
 # Additional model for stage0 forensics
-class PDFForensics(BaseModel):
+class DocumentForensics(BaseModel):
     is_scanned: bool
     page_count: int
     has_acroform_widgets: bool
     estimated_text_density: float
+    file_type: str = "pdf"  # To track the detected file type

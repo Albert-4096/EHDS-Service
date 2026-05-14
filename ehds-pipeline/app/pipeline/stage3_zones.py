@@ -1,30 +1,35 @@
 import re
 from app.pipeline.stage2_classify import DocumentType
 
-DOC_HDR_ANCHORS = [
+HOSPITAL_DISCHARGE_REPORT_ANCHORS = [
     "DATE PACIENT",
+    "DATE PACIENT / HEADER",   # virtual
     "DATE INTERNARE",
     "DIAGNOSTIC DE TRIMITERE",
     "DIAGNOSTIC LA INTERNARE",
     "DIAGNOSTIC PRINCIPAL LA EXTERNARE",
     "DIAGNOSTICE SECUNDARE",
-    "STARE LA EXTERNARE",
-    "EPICRIZĂ",
-    "TRATAMENT LA EXTERNARE",
-    "RECOMANDĂRI",
-    "MEDIC CURANT"
-]
-
-DOC_BIS_ANCHORS = [
-    "DATE PACIENT / HEADER",   # virtual
     "Diagnostic",
     "Investigatii efectuate",
+    "STARE LA EXTERNARE",
+    "TRATAMENT LA EXTERNARE",
     "Tratament",
+    "EPICRIZĂ",
     "Epicriza",
+    "RECOMANDĂRI",
     "Recomandari",
+    "MEDIC CURANT",
     "APPOINTMENT_BLOCK",       # virtual
     "CHECKBOX_BLOCKS",         # virtual
     "Calea de transmitere"
+]
+
+OUTPATIENT_MEDICAL_LETTER_ANCHORS = [
+    "DATE PACIENT / HEADER",
+    "Diagnostic",
+    "Recomandari",
+    "Tratament",
+    "Medic"
 ]
 
 def _build_diacritic_core(anchor: str) -> str:
@@ -61,10 +66,10 @@ def split_zones(text: str, doc_type: DocumentType) -> dict[str, str]:
     Returns a dictionary mapping anchor names to their extracted text content.
     If an anchor is not found, its key maps to "".
     """
-    if doc_type == DocumentType.DOC_HDR:
-        anchors = DOC_HDR_ANCHORS
-    elif doc_type == DocumentType.DOC_BIS:
-        anchors = DOC_BIS_ANCHORS
+    if doc_type == DocumentType.HOSPITAL_DISCHARGE_REPORT:
+        anchors = HOSPITAL_DISCHARGE_REPORT_ANCHORS
+    elif doc_type == DocumentType.OUTPATIENT_MEDICAL_LETTER:
+        anchors = OUTPATIENT_MEDICAL_LETTER_ANCHORS
     else:
         return {}
 
@@ -77,10 +82,8 @@ def split_zones(text: str, doc_type: DocumentType) -> dict[str, str]:
         if a not in ["DATE PACIENT / HEADER", "APPOINTMENT_BLOCK", "CHECKBOX_BLOCKS"]:
             anchor_regexes[a] = re.compile(_build_diacritic_regex(a), re.IGNORECASE)
 
-    current_zone = None
-    
-    if doc_type == DocumentType.DOC_BIS:
-        current_zone = "DATE PACIENT / HEADER"
+    # Start assuming we are in the header
+    current_zone = "DATE PACIENT / HEADER"
 
     for i, line in enumerate(lines):
         line_clean = line.strip()
@@ -91,8 +94,8 @@ def split_zones(text: str, doc_type: DocumentType) -> dict[str, str]:
             
         matched_anchor = None
         
-        # Check virtual anchors for DOC_BIS
-        if doc_type == DocumentType.DOC_BIS:
+        # Check virtual anchors for HOSPITAL_DISCHARGE_REPORT
+        if doc_type == DocumentType.HOSPITAL_DISCHARGE_REPORT:
             if re.search(r"Sunteti programat in data", line_clean, re.IGNORECASE):
                 matched_anchor = "APPOINTMENT_BLOCK"
             elif re.search(r"Indicatie de revenire", line_clean, re.IGNORECASE):
@@ -101,12 +104,7 @@ def split_zones(text: str, doc_type: DocumentType) -> dict[str, str]:
         # Check explicit anchors
         if not matched_anchor:
             for a, regex in anchor_regexes.items():
-                # We want to match the whole line or prefix
-                if regex.match(line_clean) or regex.search(line_clean) and line_clean.startswith(a[:3]): # Basic heuristics
-                    # actually the regex already handles this robustly if we use match/search carefully.
-                    # Since headers might be part of a line: `Diagnostic: NSTEMI`
-                    # We should adjust regex to match the start of the line and capture the rest if needed, 
-                    # but the prompt implies standard sectioning. Let's do a loose prefix match using the diacritic regex.
+                if regex.match(line_clean) or regex.search(line_clean) and line_clean.startswith(a[:3]):
                     prefix_regex = re.compile(r"^\s*" + _build_diacritic_core(a) + r"[:\s]*(.*)$", re.IGNORECASE)
                     m = prefix_regex.match(line_clean)
                     if m:

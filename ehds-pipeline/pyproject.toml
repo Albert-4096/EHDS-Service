@@ -18,7 +18,9 @@ dependencies = [
     "asyncpg",
     "httpx",
     "loguru",
-    "python-multipart"
+    "python-multipart",
+    "python-docx",
+    "Pillow"
 ]
 
 [project.optional-dependencies]

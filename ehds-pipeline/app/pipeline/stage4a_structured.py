@@ -16,8 +16,8 @@ REGEX_SEX = re.compile(r"\|\s*Sex:\s*([MF])", re.IGNORECASE)
 REGEX_GRUP_SANGVIN = re.compile(r"Grup\s+sangvin:\s*([ABO]{1,2}|AB)", re.IGNORECASE)
 REGEX_RH = re.compile(r"\|\s*RH:\s*(pozitiv|negativ|\+|-)", re.IGNORECASE)
 REGEX_ALERGII = re.compile(r"Alergii:\s*(.+?)(?:\n|$)", re.IGNORECASE)
-REGEX_DATA_INTERNARE = re.compile(r"Data\s+intern[aă]re:\s*(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2})", re.IGNORECASE)
-REGEX_DATA_EXTERNARE = re.compile(r"Data\s+extern[aă]re:\s*(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2})", re.IGNORECASE)
+REGEX_DATA_INTERNARE = re.compile(r"Data\s+intern[aă]r(?:e|ii)[:\s]*(\d{1,2}[/\.-]\d{1,2}[/\.-]\d{4}(?:\s+\d{2}:\d{2})?)", re.IGNORECASE)
+REGEX_DATA_EXTERNARE = re.compile(r"Data\s+extern[aă]r(?:e|ii)[:\s]*(\d{1,2}[/\.-]\d{1,2}[/\.-]\d{4}(?:\s+\d{2}:\d{2})?)", re.IGNORECASE)
 REGEX_SECTIA = re.compile(r"Sec[tț]ia:[^\S\n]*([^|\n]+?)[^\S\n]*(?:\||\n|$)", re.IGNORECASE)
 REGEX_MEDIC = re.compile(r"Medic:[^\S\n]*([^|\n]+?)[^\S\n]*(?:\||\n|$)", re.IGNORECASE)
 REGEX_CIM10 = re.compile(r"\b([A-Z]\d{2}(?:\.\d{1,2})?)\b")
@@ -27,11 +27,11 @@ def extract_structured(zones: dict[str, str], doc_type: DocumentType) -> Structu
     warnings = []
     
     # Combine text from typical header zones for basic demographic/admin searches
-    header_text = ""
-    if doc_type == DocumentType.DOC_HDR:
-        header_text = zones.get("DATE PACIENT", "") + "\n" + zones.get("DATE INTERNARE", "") + "\n" + zones.get("MEDIC CURANT", "")
-    elif doc_type == DocumentType.DOC_BIS:
-        header_text = zones.get("DATE PACIENT / HEADER", "")
+    header_text = zones.get("DATE PACIENT / HEADER", "")
+    if doc_type == DocumentType.HOSPITAL_DISCHARGE_REPORT:
+        header_text += "\n" + zones.get("DATE PACIENT", "") + "\n" + zones.get("DATE INTERNARE", "") + "\n" + zones.get("MEDIC CURANT", "")
+    elif doc_type == DocumentType.OUTPATIENT_MEDICAL_LETTER:
+        header_text += "\n" + zones.get("Medic", "")
         
     def extract_field(regex, text):
         match = regex.search(text)
@@ -48,6 +48,13 @@ def extract_structured(zones: dict[str, str], doc_type: DocumentType) -> Structu
     
     data_internarii_str = extract_field(REGEX_DATA_INTERNARE, header_text)
     data_externarii_str = extract_field(REGEX_DATA_EXTERNARE, header_text)
+    
+    # Fallback to generic DATA: if both are missing
+    if not data_internarii_str and not data_externarii_str:
+        generic_date_match = re.search(r"(?:^|\s)DATA[:\s]*(\d{1,2}[/\.-]\d{1,2}[/\.-]\d{4})", header_text, re.IGNORECASE)
+        if generic_date_match:
+            data_internarii_str = generic_date_match.group(1)
+            data_externarii_str = generic_date_match.group(1)
     
     sectia = extract_field(REGEX_SECTIA, header_text)
     medic = extract_field(REGEX_MEDIC, header_text)
@@ -82,14 +89,14 @@ def extract_structured(zones: dict[str, str], doc_type: DocumentType) -> Structu
             warnings.append(str(e))
 
     # Process Diagnoses
-    diag_zone = zones.get("DIAGNOSTIC PRINCIPAL LA EXTERNARE", "")
-    if doc_type == DocumentType.DOC_BIS:
-        diag_zone = zones.get("Diagnostic", "")
+    diag_zone = zones.get("Diagnostic", "")
+    if doc_type == DocumentType.HOSPITAL_DISCHARGE_REPORT:
+        diag_zone += "\n" + zones.get("DIAGNOSTIC PRINCIPAL LA EXTERNARE", "")
         
     diagnostic_principal = None
     diagnostice_secundare = []
     
-    if diag_zone:
+    if diag_zone.strip():
         cim_match = REGEX_CIM10.search(diag_zone)
         cod_cim10 = cim_match.group(1) if cim_match else None
         

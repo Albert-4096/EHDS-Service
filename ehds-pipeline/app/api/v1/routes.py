@@ -1,10 +1,11 @@
 import tempfile
 import traceback
+import hashlib
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from app.config import settings
 
-from app.pipeline.stage0_forensics import detect_pdf_type
+from app.pipeline.stage0_forensics import detect_file_type
 from app.pipeline.stage1_extract import extract_text
 from app.pipeline.stage1b_checkboxes import extract_checkboxes
 from app.pipeline.stage2_classify import classify_document, DocumentType
@@ -26,22 +27,29 @@ from app.utils.logger import get_logger
 router = APIRouter()
 logger = get_logger()
 
-async def process_pdf_pipeline(file: UploadFile) -> tuple:
+async def process_file_pipeline(file: UploadFile) -> tuple:
     """
     Executes the extraction pipeline up to the merge_and_validate stage.
-    Returns (MergedRecord, DocumentType)
+    Returns (MergedRecord, DocumentType, str)
     """
-    # Create temporary file to store the uploaded PDF
+    # Create temporary file to store the uploaded file, preserving extension
     logger.info(f"Received file upload: {file.filename}")
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+    
+    # Extract extension safely
+    suffix = Path(file.filename).suffix.lower() if file.filename else ".pdf"
+    if not suffix:
+        suffix = ".pdf"
+        
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         content = await file.read()
+        file_hash = hashlib.sha256(content).hexdigest()
         tmp.write(content)
         tmp_path = Path(tmp.name)
         
     try:
         # Stage 0
         logger.debug(f"Stage 0: Analyzing forensics for {tmp_path}")
-        forensics = detect_pdf_type(tmp_path)
+        forensics = detect_file_type(tmp_path)
         logger.debug(f"Forensics: scanned={forensics.is_scanned}, acroform={forensics.has_acroform_widgets}")
         
         # Stage 1 & 1b
@@ -101,7 +109,7 @@ async def process_pdf_pipeline(file: UploadFile) -> tuple:
         )
         
         logger.info(f"Pipeline processing complete. Confidence: {merged_record.overall_confidence:.2f}")
-        return merged_record, doc_type
+        return merged_record, doc_type, file_hash
         
     except Exception as e:
         logger.error(f"Pipeline error: {str(e)}\n{traceback.format_exc()}")
@@ -120,11 +128,12 @@ async def extract_primary(background_tasks: BackgroundTasks, file: UploadFile = 
     Uploads the bundle to the HAPI FHIR server in the background.
     """
     logger.info("Processing primary extraction request.")
-    if not file.filename.endswith(".pdf"):
+    supported_exts = (".pdf", ".jpg", ".jpeg", ".png", ".docx")
+    if not file.filename.lower().endswith(supported_exts):
         logger.warning(f"Invalid file upload attempted: {file.filename}")
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+        raise HTTPException(status_code=400, detail="Unsupported file format")
         
-    merged_record, doc_type = await process_pdf_pipeline(file)
+    merged_record, doc_type, file_hash = await process_file_pipeline(file)
     
     # Stage 6
     logger.debug("Stage 6: Building FHIR resources")
@@ -133,7 +142,7 @@ async def extract_primary(background_tasks: BackgroundTasks, file: UploadFile = 
     # Stage 7
     logger.debug("Stage 7: Assembling FHIR Bundle")
     medic_name = merged_record.structured.medic
-    bundle = assemble_bundle(fhir_resources, doc_type, medic_name)
+    bundle = assemble_bundle(fhir_resources, doc_type, medic_name, file_hash)
     
     # Stage 9 (Upload in background)
     logger.info(f"Scheduling background upload to FHIR server: {settings.hapi_fhir_base_url}")
@@ -149,11 +158,19 @@ async def extract_secondary(background_tasks: BackgroundTasks, file: UploadFile 
     Uploads the bundle to the HAPI FHIR server in the background.
     """
     logger.info("Processing secondary (anonymized) extraction request.")
-    if not file.filename.endswith(".pdf"):
+    supported_exts = (".pdf", ".jpg", ".jpeg", ".png", ".docx")
+    if not file.filename.lower().endswith(supported_exts):
         logger.warning(f"Invalid file upload attempted: {file.filename}")
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+        raise HTTPException(status_code=400, detail="Unsupported file format")
         
-    merged_record, doc_type = await process_pdf_pipeline(file)
+    merged_record, doc_type, file_hash = await process_file_pipeline(file)
+    
+    # Pillar 2: Opt-Out mechanism check
+    if merged_record.structured.cnp:
+        # Mock check: any CNP ending with "0000" is considered opted out
+        if merged_record.structured.cnp.endswith("0000"):
+            logger.warning(f"Patient {merged_record.structured.cnp} has opted out of secondary use.")
+            raise HTTPException(status_code=403, detail="Patient opted out of secondary use.")
     
     # Stage 8: Anonymize
     logger.info("Stage 8: Anonymizing record for Pillar 2 compliance")
@@ -166,7 +183,7 @@ async def extract_secondary(background_tasks: BackgroundTasks, file: UploadFile 
     # Stage 7
     logger.debug("Stage 7: Assembling FHIR Bundle")
     medic_name = anonymized_record.structured.medic
-    bundle = assemble_bundle(fhir_resources, doc_type, medic_name)
+    bundle = assemble_bundle(fhir_resources, doc_type, medic_name, file_hash)
     
     # Stage 9 (Upload in background)
     logger.info(f"Scheduling background upload of anonymized bundle to FHIR server: {settings.hapi_fhir_base_url}")

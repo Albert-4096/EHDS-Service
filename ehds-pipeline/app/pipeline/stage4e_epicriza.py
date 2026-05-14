@@ -12,6 +12,9 @@ class CurrentVisitSchema(BaseModel):
     examen_obiectiv: Dict[str, Optional[str]] = Field(default_factory=dict)
     clinical_status: Optional[str] = None
     administered_in_hospital: List[str] = Field(default_factory=list)
+    procedures: List[Dict[str, Optional[str]]] = Field(default_factory=list) # name, date, body_site
+    implants: List[Dict[str, Optional[str]]] = Field(default_factory=list) # name, body_site
+    adverse_events: List[str] = Field(default_factory=list)
     treatment_narrative: Optional[str] = None
 
 class HistoryTimelineEvent(BaseModel):
@@ -66,6 +69,9 @@ CRITICAL RULES:
 4. Preserve original Romanian text for all string fields. Do not translate.
 5. For imaging results, extract each as a separate entry with its date.
 6. ECOG/IP/PS performance status goes into oncology.ecog_score as an integer.
+7. Explicitly extract orthopedic/pediatric procedures (e.g., surgeries, Ender nails, osteosinteza) into `procedures`.
+8. Explicitly extract implantable hardware (K-wires, tije, placi, suruburi) into `implants`.
+9. Extract any treatment-induced adverse events (e.g., toxicitate, degradare montaj, hipofizita autoimuna) into `adverse_events`.
 """
 
 from app.utils.date_parser import parse_romanian_date, DateParseError
@@ -109,6 +115,27 @@ async def extract_epicriza(epicriza_text: str, doc_type: DocumentType) -> Epicri
                 "description": event.description
             })
             
+        from app.models.internal import ProcedureEntry, DeviceEntry
+        
+        procedures_mapped = []
+        for proc in response.current_visit.procedures:
+            proc_date = None
+            if proc.get("date"):
+                try:
+                    proc_date = parse_romanian_date(proc.get("date"))
+                except DateParseError:
+                    pass
+            procedures_mapped.append(ProcedureEntry(
+                name=proc.get("name", "Unknown Procedure"),
+                date=proc_date,
+                body_site=proc.get("body_site")
+            ))
+            
+        implants_mapped = [
+            DeviceEntry(name=imp.get("name", "Unknown Device"), body_site=imp.get("body_site"))
+            for imp in response.current_visit.implants
+        ]
+            
         return EpicrizaExtracted(
             motive_internare=response.current_visit.motive_internare,
             examen_obiectiv=response.current_visit.examen_obiectiv,
@@ -120,6 +147,9 @@ async def extract_epicriza(epicriza_text: str, doc_type: DocumentType) -> Epicri
             history_timeline=history_timeline_mapped,
             imaging_results=imaging_results_mapped,
             administered_in_hospital=response.current_visit.administered_in_hospital,
+            procedures=procedures_mapped,
+            implants=implants_mapped,
+            adverse_events=response.current_visit.adverse_events,
             oncology_raw=response.oncology.model_dump() if response.oncology else {}
         )
         

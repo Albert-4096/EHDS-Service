@@ -1,7 +1,7 @@
 import re
 import fitz
 from pathlib import Path
-from app.models.internal import PDFForensics, CheckboxGroup, CheckboxOption
+from app.models.internal import DocumentForensics, CheckboxGroup, CheckboxOption
 
 class CheckboxExtractionWarning(Warning):
     pass
@@ -14,7 +14,7 @@ CHECKBOX_CHARS = {
     '☐': False, '□': False, '○': False, '●': True
 }
 
-def extract_checkboxes(pdf_path: Path, text: str, forensics: PDFForensics) -> list[CheckboxGroup]:
+def extract_checkboxes(file_path: Path, text: str, forensics: DocumentForensics) -> list[CheckboxGroup]:
     groups = []
     
     # Determine extraction method
@@ -35,7 +35,7 @@ def extract_checkboxes(pdf_path: Path, text: str, forensics: PDFForensics) -> li
         warnings.warn("No checkboxes detected.", CheckboxExtractionWarning)
 
     if method == "acroform":
-        groups = _extract_acroform(pdf_path)
+        groups = _extract_acroform(file_path)
     elif method == "unicode":
         groups = _extract_unicode(text)
     elif method == "ocr_ascii":

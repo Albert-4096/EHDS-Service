@@ -23,11 +23,11 @@ ROMANIAN_MONTHS = {
 
 # Pre-compile regex patterns for performance
 # Formats: DD/MM/YYYY HH:MM or DD/MM/YYYY
-REGEX_SLASH_DATETIME = re.compile(r"^(\d{2})/(\d{2})/(\d{4})\s+(\d{2}):(\d{2})$")
-REGEX_SLASH_DATE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
+REGEX_SLASH_DATETIME = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})\s+(\d{2}):(\d{2})$")
+REGEX_SLASH_DATE = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
 
 # Formats: DD.MM.YYYY
-REGEX_DOT_DATE = re.compile(r"^(\d{2})\.(\d{2})\.(\d{4})$")
+REGEX_DOT_DATE = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$")
 
 # Format: DD MonthName YYYY
 REGEX_ROMANIAN_MONTH_DATE = re.compile(r"^(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})$")
@@ -47,19 +47,28 @@ def parse_romanian_date(raw: str) -> date:
     match = REGEX_SLASH_DATETIME.match(raw_stripped)
     if match:
         day, month, year, _, _ = match.groups()
-        return date(int(year), int(month), int(day))
+        try:
+            return date(int(year), int(month), int(day))
+        except ValueError:
+            return date(int(year), int(day), int(month))
 
     # Try DD/MM/YYYY
     match = REGEX_SLASH_DATE.match(raw_stripped)
     if match:
         day, month, year = match.groups()
-        return date(int(year), int(month), int(day))
+        try:
+            return date(int(year), int(month), int(day))
+        except ValueError:
+            return date(int(year), int(day), int(month))
 
     # Try DD.MM.YYYY
     match = REGEX_DOT_DATE.match(raw_stripped)
     if match:
         day, month, year = match.groups()
-        return date(int(year), int(month), int(day))
+        try:
+            return date(int(year), int(month), int(day))
+        except ValueError:
+            return date(int(year), int(day), int(month))
 
     # Try DD MonthName YYYY
     match = REGEX_ROMANIAN_MONTH_DATE.match(raw_stripped)
@@ -84,7 +93,10 @@ def parse_romanian_datetime(raw: str) -> datetime:
     match = REGEX_SLASH_DATETIME.match(raw_stripped)
     if match:
         day, month, year, hour, minute = match.groups()
-        dt = datetime(int(year), int(month), int(day), int(hour), int(minute))
+        try:
+            dt = datetime(int(year), int(month), int(day), int(hour), int(minute))
+        except ValueError:
+            dt = datetime(int(year), int(day), int(month), int(hour), int(minute))
     
     # Try other formats without time
     if dt is None:
