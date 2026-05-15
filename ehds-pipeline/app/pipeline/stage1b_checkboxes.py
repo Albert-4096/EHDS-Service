@@ -61,32 +61,57 @@ def extract_checkboxes(file_path: Path, text: str, forensics: DocumentForensics)
 
     return groups
 
+def _nearest_label(page_dict: dict, widget_rect, y_tolerance: float = 20.0) -> str:
+    """HP-01: Match checkbox widget to nearest text span by Y proximity."""
+    wx0, wy0, wx1, wy1 = widget_rect
+    widget_mid_y = (wy0 + wy1) / 2
+    best_label = ""
+    best_dist = float("inf")
+
+    for block in page_dict.get("blocks", []):
+        if block.get("type") != 0:
+            continue
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                text = (span.get("text") or "").strip()
+                if not text or len(text) > 120:
+                    continue
+                sx0, sy0, sx1, sy1 = span["bbox"]
+                if sx0 > wx1 + 5:
+                    continue
+                span_mid_y = (sy0 + sy1) / 2
+                dist = abs(span_mid_y - widget_mid_y)
+                if dist <= y_tolerance and dist < best_dist:
+                    best_dist = dist
+                    best_label = text
+
+    return best_label
+
+
 def _extract_acroform(pdf_path: Path) -> list[CheckboxGroup]:
-    # Placeholder for AcroForm extraction logic as requested.
-    # The prompt described widget matching by Y coordinates.
-    # We group by field_name prefix.
-    groups_dict = {}
-    
+    groups_dict: dict[str, list] = {}
+
     with fitz.open(pdf_path) as doc:
         for page in doc:
-            page_text = page.get_text("dict")
+            page_dict = page.get_text("dict")
             for widget in page.widgets():
-                if widget.field_type == fitz.PDF_WIDGET_TYPE_CHECKBOX:
-                    # Match nearest text using rect.y1 + 20pt
-                    label = widget.field_name # Fallback
-                    # Very simple grouping by prefix (assuming dot notation or similar)
-                    prefix = widget.field_name.split('.')[0] if '.' in widget.field_name else "Unknown Group"
-                    checked = widget.field_value in ["Yes", "On", "1", "True"]
-                    
-                    if prefix not in groups_dict:
-                        groups_dict[prefix] = []
-                    groups_dict[prefix].append(CheckboxOption(label=label, checked=checked, raw_marker="[AcroForm]"))
-                    
-    groups = []
-    for header, options in groups_dict.items():
-        groups.append(CheckboxGroup(header=header, options=options, extraction_method="acroform"))
-        
-    return groups
+                if widget.field_type != fitz.PDF_WIDGET_TYPE_CHECKBOX:
+                    continue
+                field_name = widget.field_name or "Unknown"
+                label = _nearest_label(page_dict, widget.rect) or field_name
+                prefix = field_name.split(".")[0] if "." in field_name else "Unknown Group"
+                checked = widget.field_value in ["Yes", "On", "1", "True", True]
+
+                if prefix not in groups_dict:
+                    groups_dict[prefix] = []
+                groups_dict[prefix].append(
+                    CheckboxOption(label=label, checked=bool(checked), raw_marker="[AcroForm]")
+                )
+
+    return [
+        CheckboxGroup(header=header, options=options, extraction_method="acroform")
+        for header, options in groups_dict.items()
+    ]
 
 def _extract_unicode(text: str) -> list[CheckboxGroup]:
     groups = []

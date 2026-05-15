@@ -80,10 +80,10 @@ def extract_oncology(zones: dict[str, str], epicriza_data: EpicrizaExtracted | N
                 break
                 
     # Molecular Markers
-    molecular_markers = oncology_raw.get("molecular_markers", {})
-    if not molecular_markers:
+    molecular_markers = dict(oncology_raw.get("molecular_markers", {}) or {})
+    if not molecular_markers.get("BRAF"):
         if REGEX_BRAF.search(diag_zone) or REGEX_BRAF.search(epicriza_zone):
-            molecular_markers["BRAF"] = "V600E" # Generic assumption based on standard
+            molecular_markers["BRAF"] = "mutant"
 
     return OncologyFields(
         cycle_number=cycle_number,

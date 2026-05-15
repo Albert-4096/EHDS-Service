@@ -20,7 +20,8 @@ dependencies = [
     "loguru",
     "python-multipart",
     "python-docx",
-    "Pillow"
+    "Pillow",
+    "anthropic",
 ]
 
 [project.optional-dependencies]

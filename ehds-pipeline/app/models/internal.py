@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date as DateType, datetime
 from typing import Optional, List, Dict
 from pydantic import BaseModel, Field
 
@@ -27,7 +27,7 @@ class LabValue(BaseModel):
     loinc_code: Optional[str] = None     # from loinc_map lookup
 
 class LabResults(BaseModel):
-    bulletin_date: Optional[date] = None
+    bulletin_date: Optional[DateType] = None
     cbc: dict[str, LabValue]           # hemoleucograma
     biochemistry: dict[str, LabValue]  # biochimie
     hormones: dict[str, LabValue]      # TSH, FT4, cortizol etc.
@@ -35,7 +35,7 @@ class LabResults(BaseModel):
 
 class ImagingResult(BaseModel):
     modality: str              # "PET CT", "CT TAP", "RMN cerebral"
-    date: Optional[date] = None
+    date: Optional[DateType] = None
     institution: Optional[str] = None
     conclusion: str
     is_current_visit: bool     # HP-12: True only if from this admission
@@ -62,7 +62,7 @@ class TransfusionRecord(BaseModel):
     rh: str
     product_type: str
     bag_number: str
-    date: Optional[date] = None
+    date: Optional[DateType] = None
 
 class AdminCheckboxes(BaseModel):
     readmission_required: Optional[bool] = None
@@ -83,10 +83,12 @@ class AppointmentBlock(BaseModel):
 
 class StructuredFields(BaseModel):
     doc_type: str                   # "DOC_HDR" | "DOC_BIS"
+    nume: Optional[str] = None                # HP-13 patient name
+    domiciliu: Optional[str] = None           # HP-02 address column
     nr_focg: Optional[str] = None
     contract_number: Optional[str] = None     # HP-08
     cnp: Optional[str] = None
-    dob_from_cnp: Optional[date] = None       # HP-13: derived
+    dob_from_cnp: Optional[DateType] = None       # HP-13: derived
     sex_from_cnp: Optional[str] = None
     varsta: Optional[int] = None
     sex_explicit: Optional[str] = None
@@ -105,8 +107,11 @@ class StructuredFields(BaseModel):
 
 class ProcedureEntry(BaseModel):
     name: str
-    date: Optional[date] = None
+    date: Optional[DateType] = None
+    performed_age: Optional[str] = None
     body_site: Optional[str] = None
+    implants_inserted: list[str] = Field(default_factory=list)
+    implants_removed: list[str] = Field(default_factory=list)
     
 class DeviceEntry(BaseModel):
     name: str
@@ -126,6 +131,7 @@ class EpicrizaExtracted(BaseModel):
     imaging_results: list[ImagingResult] = Field(default_factory=list)  # HP-18
     administered_in_hospital: list[str] = Field(default_factory=list)
     procedures: list[ProcedureEntry] = Field(default_factory=list)
+    historical_procedures: list[ProcedureEntry] = Field(default_factory=list)
     implants: list[DeviceEntry] = Field(default_factory=list)
     adverse_events: list[str] = Field(default_factory=list)
     oncology_raw: Optional[dict] = Field(default_factory=dict)  # From LLM extraction
@@ -140,8 +146,6 @@ class MedicationEntry(BaseModel):
     dose_is_total: bool = False    # HP-10: "DT" suffix
     raw: str
 
-from pydantic import model_validator
-
 class MergedRecord(BaseModel):
     doc_type: str
     structured: StructuredFields
@@ -154,21 +158,6 @@ class MergedRecord(BaseModel):
     transfusions: list[TransfusionRecord] = Field(default_factory=list)
     overall_confidence: float = 0.0
     all_warnings: list[str] = Field(default_factory=list)
-
-    @model_validator(mode='after')
-    def validate_ehds_pillars(self) -> 'MergedRecord':
-        # Late import to avoid circular dependency
-        from app.pipeline.stage2_classify import DocumentType
-        
-        if self.doc_type == DocumentType.HOSPITAL_DISCHARGE_REPORT.value:
-            if not self.structured.data_internarii or not self.structured.data_externarii:
-                raise ValueError("HOSPITAL_DISCHARGE_REPORT strictly requires Data Internarii (period.start) and Data Externarii (period.end).")
-        elif self.doc_type == DocumentType.OUTPATIENT_MEDICAL_LETTER.value:
-            if not self.structured.medic:
-                raise ValueError("OUTPATIENT_MEDICAL_LETTER strictly requires a target recipient (Practitioner / Family Doctor).")
-            if not self.medications:
-                raise ValueError("OUTPATIENT_MEDICAL_LETTER strictly requires recommended ambulatory treatment (MedicationRequest).")
-        return self
 
 # Additional model for stage0 forensics
 class DocumentForensics(BaseModel):

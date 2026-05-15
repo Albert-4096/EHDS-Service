@@ -128,17 +128,49 @@ def _parse_lab_entry(entry: str) -> Tuple[str, LabValue] | None:
         loinc_code=loinc_code
     )
 
+
+HORMONE_KEYWORDS = (
+    "tsh", "ft4", "cortizol", "dhea", "fsh", "lh", "prolactina",
+    "estradiol", "testosteron", "progesteron",
+)
+
+
+def _is_hormone_entry(key: str, lab: LabValue) -> bool:
+    combined = f"{key} {lab.test_name} {lab.test_abbreviation or ''}".lower()
+    return any(kw in combined for kw in HORMONE_KEYWORDS)
+
+
+def _split_panels(entries: list[str]) -> tuple[dict, dict, dict]:
+    """HP-05: Route parsed entries into biochemistry vs hormones vs other."""
+    biochem: dict = {}
+    hormones: dict = {}
+    other: dict = {}
+
+    for entry in entries:
+        parsed = _parse_lab_entry(entry)
+        if not parsed:
+            continue
+        key, lab = parsed
+        if _is_hormone_entry(key, lab):
+            hormones[key] = lab
+        else:
+            biochem[key] = lab
+
+    return biochem, hormones, other
+
+
 def extract_labs(lab_zone_text: str) -> LabResults:
     """
     Extracts laboratory panels from the lab zone text.
     Handles hemoleucograma and biochemistry distinct patterns.
     """
-    cbc = {}
-    biochem = {}
-    other = {}
-    
+    cbc: dict = {}
+    biochem: dict = {}
+    hormones: dict = {}
+    other: dict = {}
+
     if not lab_zone_text:
-        return LabResults(cbc=cbc, biochemistry=biochem, hormones={}, other=other)
+        return LabResults(cbc=cbc, biochemistry=biochem, hormones=hormones, other=other)
         
     # HP-03: Superscript repair BEFORE any parsing
     text = _repair_superscripts(lab_zone_text)
@@ -160,25 +192,23 @@ def extract_labs(lab_zone_text: str) -> LabResults:
                         cbc[parsed[0]] = parsed[1]
                 
                 # After the closing "]", extract comma-separated pairs as biochemistry panel
-                after_cbc = text[bracket_end+1:].strip()
-                biochem_entries = [e.strip() for e in after_cbc.replace("\n", " ").split(",")]
-                for entry in biochem_entries:
-                    parsed = _parse_lab_entry(entry)
-                    if parsed:
-                        biochem[parsed[0]] = parsed[1]
+                after_cbc = text[bracket_end + 1 :].strip()
+                post_entries = [e.strip() for e in after_cbc.replace("\n", " ").split(",") if e.strip()]
+                b, h, o = _split_panels(post_entries)
+                biochem.update(b)
+                hormones.update(h)
+                other.update(o)
     else:
-        # If no Hemoleucograma marker, parse everything as other or biochem
-        # We can just attempt comma separated
-        entries = [e.strip() for e in text.replace("\n", " ").split(",")]
-        for entry in entries:
-            parsed = _parse_lab_entry(entry)
-            if parsed:
-                other[parsed[0]] = parsed[1]
-                
+        entries = [e.strip() for e in text.replace("\n", " ").split(",") if e.strip()]
+        b, h, o = _split_panels(entries)
+        biochem.update(b)
+        hormones.update(h)
+        other.update(o)
+
     return LabResults(
-        bulletin_date=None, # HP-06 format F says lab results have dates, but extraction strategy for bulletin date wasn't explicit. Leaving None.
+        bulletin_date=None,
         cbc=cbc,
         biochemistry=biochem,
-        hormones={},
-        other=other
+        hormones=hormones,
+        other=other,
     )

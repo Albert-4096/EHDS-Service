@@ -71,3 +71,17 @@ def normalise_whitespace(text: str) -> str:
     Does not strip single newlines.
     """
     return re.sub(r"\n{3,}", "\n\n", text)
+
+
+def strip_page_artifacts(text: str) -> str:
+    """
+    HP-07: Remove page number artifacts (e.g. '2 / 3') and orphan page-break lines
+  before Epicriza LLM submission.
+    """
+    if not text:
+        return text
+    # Page numbers like "2 / 3" or "2/3"
+    text = re.sub(r"(?m)^\s*\d+\s*/\s*\d+\s*$", "", text)
+    # Standalone page indicators
+    text = re.sub(r"(?m)^\s*-\s*\d+\s*-\s*$", "", text)
+    return normalise_whitespace(text)

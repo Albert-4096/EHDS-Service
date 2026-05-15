@@ -8,9 +8,10 @@ def test_anonymize_record():
     original_cnp = "1800101123456"
     
     structured = StructuredFields(
-        doc_type=DocumentType.DOC_BIS.value,
+        doc_type=DocumentType.OUTPATIENT_MEDICAL_LETTER.value,
         cnp=original_cnp,
         dob_from_cnp=date(1980, 1, 1),
+        data_internarii=None,
         medic="Dr. Popescu Ion"
     )
     
@@ -20,7 +21,7 @@ def test_anonymize_record():
     )
     
     record = MergedRecord(
-        doc_type=DocumentType.DOC_BIS.value,
+        doc_type=DocumentType.OUTPATIENT_MEDICAL_LETTER.value,
         structured=structured,
         epicriza=epicriza,
         medications=[],
@@ -40,5 +41,5 @@ def test_anonymize_record():
     assert anon.structured.dob_from_cnp != date(1980, 1, 1)
     
     # Assert PII in narrative is scrubbed
-    assert "Nume" not in anon.epicriza.antecedente_heredocolaterale
-    assert "[REDACTED]" in anon.epicriza.antecedente_heredocolaterale
+    assert "Ion" not in (anon.epicriza.antecedente_heredocolaterale or "")
+    assert "[REDACTED" in (anon.epicriza.antecedente_heredocolaterale or "")
