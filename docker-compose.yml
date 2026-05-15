@@ -2,33 +2,13 @@
 # EHDS Service — docker-compose
 #
 # Services:
-#   frontend      React SPA (Vite/Nginx) — port 8018
-#   api           FastAPI extraction pipeline — port 8000
-#   hapi-fhir     HAPI FHIR R4 server (internal, no host port)
-#   postgres      PostgreSQL 16 — internal
-#   snowstorm-es  Elasticsearch 8.11 (Snowstorm backend) — internal
-#   snowstorm     SNOMED CT terminology server (FHIR API) — port 8085
+#   frontend   React SPA (Vite/Nginx) — port 8018
+#   api        FastAPI extraction pipeline — port 8000
+#   hapi-fhir  HAPI FHIR R4 server (internal)
+#   postgres   PostgreSQL 16 (internal)
 #
-# ── Loading SNOMED CT into Snowstorm ──────────────────────────────────
-# Snowstorm starts EMPTY. You must load a SNOMED CT RF2 snapshot once
-# after the stack is up. Steps:
-#
-#   1. Obtain the SNOMED CT International Edition RF2 zip from:
-#      https://www.snomed.org/snomed-ct/get-snomed
-#      (free licence required)
-#
-#   2. Create an import job:
-#      curl -s -X POST http://localhost:8085/imports \
-#        -H 'Content-Type: application/json' \
-#        -d '{"branchPath":"MAIN","createCodeSystemVersion":true,"type":"SNAPSHOT"}' \
-#        | jq -r '.id'   # note the import id
-#
-#   3. Upload the RF2 zip (takes 30-60 min):
-#      curl -X POST \
-#        "http://localhost:8085/imports/<import-id>/archive" \
-#        -F file=@SnomedCT_InternationalRF2_PRODUCTION_*.zip
-#
-# The Elasticsearch volume (snowstorm-es-data) persists across restarts.
+# SNOMED CT terminology validation uses the public Snowstorm server:
+#   https://snowstorm.snomedtools.org/fhir
 # ─────────────────────────────────────────────────────────────────────
 
 services:
@@ -53,7 +33,6 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - HAPI_FHIR_BASE_URL=http://hapi-fhir:8080/fhir
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ehds_db
-      - SNOWSTORM_URL=http://snowstorm:8080/fhir
     volumes:
       - api-logs:/app/logs
     networks:
@@ -68,8 +47,6 @@ services:
       hapi-fhir:
         condition: service_started
       postgres:
-        condition: service_started
-      snowstorm:
         condition: service_started
 
   hapi-fhir:
@@ -104,74 +81,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Snowstorm: SNOMED CT FHIR terminology server ───────────────────
-  # Requires Elasticsearch as its data backend.
-  # Swagger UI (once SNOMED loaded): http://localhost:8085
-  # FHIR endpoint:                   http://localhost:8085/fhir
-  # Elasticsearch requires vm.max_map_count >= 262144 set on the HOST kernel.
-  # This init container runs once with host privileges and exits cleanly.
-  # snowstorm-es waits for it to complete before starting.
-  snowstorm-sysctl:
-    image: busybox
-    command: sysctl -w vm.max_map_count=262144
-    privileged: true
-    network_mode: none
-    restart: "no"
-
-  snowstorm-es:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
-    environment:
-      - node.name=snowstorm-es
-      - cluster.name=snowstorm-cluster
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - bootstrap.memory_lock=true
-      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    depends_on:
-      snowstorm-sysctl:
-        condition: service_completed_successfully
-    volumes:
-      - snowstorm-es-data:/usr/share/elasticsearch/data
-    networks:
-      - ehds-network
-    restart: unless-stopped
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - |
-          curl -sf "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s" \
-          | grep -qE '"status":"(green|yellow)"'
-      interval: 30s
-      timeout: 15s
-      retries: 10
-      start_period: 60s
-
-  snowstorm:
-    image: snomedinternational/snowstorm:latest
-    entrypoint: >
-      java -Xms2g -Xmx4g
-      -cp @/app/jib-classpath-file
-      org.snomed.snowstorm.SnowstormApplication
-      --elasticsearch.urls=http://snowstorm-es:9200
-    ports:
-      - "8085:8080"
-    networks:
-      - ehds-network
-    restart: unless-stopped
-    depends_on:
-      snowstorm-es:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/fhir/metadata"]
-      interval: 30s
-      timeout: 15s
-      retries: 15
-      start_period: 120s
-
 networks:
   ehds-network:
     driver: bridge
@@ -180,4 +89,3 @@ volumes:
   hapi-data:
   postgres-data:
   api-logs:
-  snowstorm-es-data:

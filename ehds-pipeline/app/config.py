@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 3000
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ehds_db"
     hapi_fhir_base_url: str = "http://localhost:8080/fhir"
-    snowstorm_url: str = "http://localhost:8085/fhir"
+    snowstorm_url: str = "https://snowstorm.snomedtools.org/fhir"
     environment: str = "development"
     pdf_ocr_lang: str = "ron"
     # HP-02: column x-thresholds for demographics table (fractions of page width)
