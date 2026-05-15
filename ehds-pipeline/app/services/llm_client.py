@@ -35,7 +35,6 @@ class LLMClient:
                 ),
                 mode=instructor.Mode.JSON,
             )
-            self.model = "google/gemma-4-26b-a4b-it:free"
         else:
             self._provider = "none"
             self.client = None
