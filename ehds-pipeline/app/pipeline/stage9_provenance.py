@@ -14,12 +14,6 @@ def build_provenance(composition_ref: str, file_hash: str, ai_model_version: str
     Every Bundle MUST have a 'Provenance' resource with a SHA-256 hash of the source PDF
     and the AI model version used, linked to the Composition.
     """
-    prov = Provenance(
-        id=generate_uuid(),
-        target=[Reference(reference=composition_ref)],
-        recorded=datetime.now(timezone.utc)
-    )
-    
     # Identify the AI Model
     agent = ProvenanceAgent(
         type=CodeableConcept(
@@ -27,13 +21,19 @@ def build_provenance(composition_ref: str, file_hash: str, ai_model_version: str
         ),
         who=Reference(display=f"EHDS Pipeline AI: {ai_model_version}")
     )
-    prov.agent = [agent]
     
     # Store the file hash
     entity = ProvenanceEntity(
         role="source",
         what=Reference(display=f"Source Document SHA-256: {file_hash}")
     )
-    prov.entity = [entity]
+
+    prov = Provenance(
+        id=generate_uuid(),
+        target=[Reference(reference=composition_ref)],
+        recorded=datetime.now(timezone.utc),
+        agent=[agent],
+        entity=[entity]
+    )
     
     return prov

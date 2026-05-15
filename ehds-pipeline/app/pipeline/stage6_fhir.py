@@ -191,6 +191,7 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
                 id=generate_uuid(),
                 status="final",
                 subject=patient_ref,
+                code=code_concept,
                 category=[
                     _codeable_concept(
                         "http://terminology.hl7.org/CodeSystem/observation-category",
@@ -198,7 +199,6 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
                     )
                 ],
             )
-            obs.code = code_concept
             obs.encounter = encounter_ref
 
             if lab.value_numeric is not None:
@@ -232,10 +232,10 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
         obs = Observation(
             id=generate_uuid(),
             status="final",
-            subject=patient_ref
+            subject=patient_ref,
+            code=_codeable_concept("http://loinc.org", "21908-9", display="Stage group.clinical Cancer"),
+            encounter=encounter_ref
         )
-        obs.code = _codeable_concept("http://loinc.org", "21908-9", display="Stage group.clinical Cancer")
-        obs.encounter = encounter_ref
         if tnm.stage_group:
             obs.valueString = tnm.stage_group
         resources.append(obs)
