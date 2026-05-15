@@ -1,103 +1,87 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary-50: #f0f9ff;
-  --color-primary-100: #e0f2fe;
-  --color-primary-500: #0ea5e9;
-  --color-primary-600: #0284c7;
-  --color-primary-700: #0369a1;
-  --color-background: #0a0f1e;
-  --color-surface: #111827;
-  --color-surface-hover: #1f2937;
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #94a3b8;
+  --color-background: #F5F7FA;
+  --color-surface:    #FFFFFF;
+  --color-navy:       #0F2A4A;
+  --color-navy-2:     #1E4D8A;
+  --color-accent:     #3A7BD5;
+  --color-border:     #E5E9F0;
+  --color-text:       #1A2433;
+  --color-muted:      #5B6878;
+  --color-ok:         #0E8559;
+  --color-warn:       #C03A2B;
 }
 
 body {
-  background-color: var(--color-background);
-  color: var(--color-text-primary);
+  background-color: #F5F7FA;
+  color: #1A2433;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   margin: 0;
   padding: 0;
   min-height: 100vh;
 }
 
-/* ── Glassmorphism ───────────────────────────────────────────── */
-.glass-panel {
-  background: rgba(17, 24, 39, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.glass-card {
-  background: rgba(31, 41, 55, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
 /* ── Scrollbar ───────────────────────────────────────────────── */
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: rgba(15,23,42,.5); border-radius: 3px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(100,116,139,.5); border-radius: 3px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,.8); }
+.custom-scrollbar::-webkit-scrollbar-track { background: rgba(229,233,240,.5); border-radius: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(91,104,120,.4); border-radius: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(91,104,120,.7); }
 
-/* ── Text utilities ──────────────────────────────────────────── */
-.gradient-text {
-  background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+/* ── JSON syntax highlighting (used in dark code panel) ──────── */
+.jkey  { color: #7DA8E0; }
+.jstr  { color: #C7E8B0; }
+.jnum  { color: #F4B97A; }
+.jbool { color: #E895C8; }
+.jnull { color: #888; }
+.jbrace { color: #E2E8F0; }
+.jcol  { color: #E2E8F0; }
 
-.eu-bg {
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(14,165,233,.15), transparent),
-    radial-gradient(ellipse 60% 40% at 80% 60%, rgba(20,184,166,.08), transparent);
-}
-
-/* ── Loading screen: orbital ring animations ─────────────────── */
-@keyframes ring1-orbit {
-  from { transform: rotateX(68deg) rotateZ(0deg); }
-  to   { transform: rotateX(68deg) rotateZ(360deg); }
-}
-@keyframes ring2-orbit {
-  from { transform: rotateX(68deg) rotateZ(60deg); }
-  to   { transform: rotateX(68deg) rotateZ(-300deg); }
-}
-@keyframes ring3-orbit {
-  from { transform: rotateX(68deg) rotateZ(120deg); }
-  to   { transform: rotateX(68deg) rotateZ(480deg); }
+/* ── Animations ──────────────────────────────────────────────── */
+@keyframes aspin {
+  to { transform: rotate(360deg); }
 }
 
-/* Center core glow cycles between blue and teal */
-@keyframes core-glow {
-  0%,100% { box-shadow: 0 0 24px 10px rgba(59,130,246,.45), 0 0 48px 20px rgba(59,130,246,.15); }
-  50%      { box-shadow: 0 0 32px 14px rgba(20,184,166,.55), 0 0 64px 28px rgba(20,184,166,.18); }
+@keyframes apulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(14,133,89,.4); }
+  50%     { box-shadow: 0 0 0 8px rgba(14,133,89,0); }
 }
 
-/* Expanding sonar halo */
-@keyframes halo-expand {
-  0%   { transform: scale(.85); opacity: .55; }
-  100% { transform: scale(2.6); opacity: 0; }
+@keyframes afade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Particle inner glow pulse */
-@keyframes particle-glow {
-  0%,100% { opacity: .85; }
-  50%      { opacity: 1; transform: scale(1.25); }
-}
+/* ── Loading screen globe & whirl ────────────────────────────── */
+@keyframes ld-whirl { to { transform: rotate(360deg); } }
 
-/* Scanning gradient sweep across the core */
-@keyframes scan-sweep {
-  0%   { background-position: -200% center; }
-  100% { background-position: 200% center; }
-}
+.ld-whirl-slow { transform-box: view-box; transform-origin: 50% 50%; animation: ld-whirl 36s linear infinite; }
+.ld-whirl-cw   { transform-box: view-box; transform-origin: 50% 50%; animation: ld-whirl 22s linear infinite; }
+.ld-whirl-ccw  { transform-box: view-box; transform-origin: 50% 50%; animation: ld-whirl 14s linear infinite reverse; }
+.ld-streak-cw  { transform-box: view-box; transform-origin: 50% 50%; animation: ld-whirl 3.6s linear infinite; }
+.ld-streak-ccw { transform-box: view-box; transform-origin: 50% 50%; animation: ld-whirl 5.2s linear infinite reverse; }
+.ld-micro-cw   { transform-box: view-box; transform-origin: 50% 50%; animation: ld-whirl 8s linear infinite; }
 
-/* Drag-drop dropzone shimmer */
-@keyframes dropzone-shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+@keyframes ld-pulse {
+  50% { transform: scale(.55); opacity: .35; }
+}
+@keyframes ld-breath {
+  0%, 100% { opacity: .85; transform: translate(-50%, -50%) scale(.95); }
+  50%       { opacity: 1;   transform: translate(-50%, -50%) scale(1.05); }
+}
+@keyframes ld-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ld-mote-drift {
+  0%   { transform: translate(var(--ld-x), var(--ld-y)) scale(.3); opacity: 0; }
+  18%  { opacity: 1; }
+  80%  { opacity: 0.85; }
+  100% { transform: translate(0, 0) scale(0); opacity: 0; }
+}
+.ld-mote {
+  animation-name: ld-mote-drift;
+  animation-iteration-count: infinite;
+  animation-timing-function: cubic-bezier(.4, .05, .6, 1);
+  will-change: transform, opacity;
 }

@@ -3,21 +3,77 @@ import axios from 'axios';
 import { UploadDropzone } from './components/UploadDropzone';
 import { LoadingScreen } from './components/LoadingScreen';
 import { ResultView } from './components/ResultView';
-import { AnimatedBackground } from './components/AnimatedBackground';
-import { ShieldCheck, Globe } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
+const BLUE   = '#0F2A4A';
+const ACCENT = '#3A7BD5';
+const MUTED  = '#5B6878';
+const BORDER = '#E5E9F0';
+const TEXT   = '#1A2433';
+
 type AppState = 'upload' | 'loading' | 'result' | 'error';
+
+function TopBar({ step }: { step: AppState }) {
+  const crumbs =
+    step === 'upload'  ? ['Conversions', 'New upload'] :
+    step === 'loading' ? ['Conversions', 'Processing…'] :
+    step === 'error'   ? ['Conversions', 'Error'] :
+                         ['Conversions', 'Result'];
+
+  return (
+    <div style={{
+      height: 56,
+      background: '#fff',
+      borderBottom: `1px solid ${BORDER}`,
+      display: 'flex',
+      alignItems: 'center',
+      padding: '0 28px',
+      gap: 24,
+      flexShrink: 0,
+      position: 'sticky',
+      top: 0,
+      zIndex: 50,
+    }}>
+      {/* Brand */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600, color: BLUE, fontSize: 15, letterSpacing: -0.2, flexShrink: 0 }}>
+        <div style={{
+          width: 26, height: 26, borderRadius: 6, background: BLUE, color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, fontWeight: 700,
+        }}>EP</div>
+        <span>EHDS Platform</span>
+      </div>
+
+      {/* Breadcrumb */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: MUTED }}>
+        {crumbs.map((c, i) => (
+          <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {i > 0 && <span style={{ opacity: 0.4 }}>/</span>}
+            <span style={i === crumbs.length - 1 ? { color: TEXT, fontWeight: 500 } : undefined}>{c}</span>
+          </span>
+        ))}
+      </div>
+
+      {/* Right side badges */}
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+        <span style={{ color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 20, padding: '3px 10px', fontFamily: '"IBM Plex Mono", monospace' }}>EHDS 2025/327</span>
+        <span style={{ color: ACCENT, border: `1px solid #C9D4E2`, borderRadius: 20, padding: '3px 10px', fontFamily: '"IBM Plex Mono", monospace' }}>HL7 FHIR R4</span>
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const [appState, setAppState] = useState<AppState>('upload');
   const [bundleData, setBundleData] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isAnonymized, setIsAnonymized] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
   const handleFileSelect = async (file: File, usePillar2: boolean) => {
     setIsAnonymized(usePillar2);
+    setUploadedFile(file);
     setAppState('loading');
     setErrorMessage('');
 
@@ -45,39 +101,20 @@ function App() {
     setAppState('upload');
     setBundleData(null);
     setErrorMessage('');
+    setUploadedFile(null);
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0f1e] text-slate-100 font-sans selection:bg-teal-500/30">
-      {/* Canvas background — fixed, behind everything */}
-      <AnimatedBackground />
+    <div style={{ minHeight: '100vh', background: '#F5F7FA', fontFamily: '"Inter", -apple-system, sans-serif', color: TEXT, display: 'flex', flexDirection: 'column' }}>
+      <TopBar step={appState} />
 
-      {/* Nav */}
-      <nav className="border-b border-slate-800/60 bg-[#0a0f1e]/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-teal-400 flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <span className="font-bold text-white text-base leading-none">+</span>
-            </div>
-            <span className="text-lg font-semibold tracking-tight">
-              EHDS<span className="text-teal-400">.</span>Pipeline
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Badge icon={<ShieldCheck size={11} />} label="EHDS 2025/327" color="blue" />
-            <Badge icon={<Globe size={11} />} label="HL7 FHIR R4" color="teal" />
-            <span className="hidden sm:block text-xs text-slate-600 border border-slate-700/60 px-2 py-1 rounded-full font-mono">
-              EEHRxF Ready
-            </span>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main content — above canvas */}
-      <main className="relative z-10 px-4 pb-12">
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {appState === 'upload' && (
           <UploadDropzone onFileSelect={handleFileSelect} />
+        )}
+
+        {appState === 'loading' && (
+          <LoadingScreen fileName={uploadedFile?.name} />
         )}
 
         {appState === 'result' && (
@@ -85,20 +122,34 @@ function App() {
             bundleData={bundleData}
             onReset={resetApp}
             isAnonymized={isAnonymized}
+            originalFile={uploadedFile}
           />
         )}
 
         {appState === 'error' && (
-          <div className="max-w-2xl mx-auto mt-20 text-center">
-            <div className="glass-panel p-8 rounded-2xl border border-red-500/30 bg-red-500/5">
-              <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
-                <span className="text-red-400 text-2xl">✕</span>
+          <div style={{ maxWidth: 560, margin: '80px auto', padding: '0 24px' }}>
+            <div style={{
+              background: '#fff',
+              border: `1px solid #F5C6C3`,
+              borderRadius: 12,
+              padding: 32,
+              textAlign: 'center',
+            }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: 24, background: '#FDECEA',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
+              }}>
+                <span style={{ color: '#C03A2B', fontSize: 22, fontWeight: 700 }}>✕</span>
               </div>
-              <h2 className="text-xl font-bold text-red-400 mb-3">Processing Failed</h2>
-              <p className="text-slate-300 text-sm mb-6 leading-relaxed">{errorMessage}</p>
+              <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 600, color: '#C03A2B' }}>Processing Failed</h2>
+              <p style={{ color: MUTED, fontSize: 14, lineHeight: 1.6, margin: '0 0 24px' }}>{errorMessage}</p>
               <button
                 onClick={resetApp}
-                className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors border border-slate-600 text-sm font-medium"
+                style={{
+                  padding: '10px 24px', background: BLUE, color: '#fff',
+                  border: 'none', borderRadius: 6, cursor: 'pointer',
+                  fontFamily: 'inherit', fontSize: 14, fontWeight: 500,
+                }}
               >
                 Try Again
               </button>
@@ -106,23 +157,7 @@ function App() {
           </div>
         )}
       </main>
-
-      {/* Loading overlay — fixed fullscreen, rendered outside main */}
-      {appState === 'loading' && <LoadingScreen />}
     </div>
-  );
-}
-
-function Badge({ icon, label, color }: { icon: React.ReactNode; label: string; color: 'blue' | 'teal' }) {
-  const colors = {
-    blue: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
-    teal: 'text-teal-400 border-teal-500/30 bg-teal-500/10',
-  };
-  return (
-    <span className={`hidden sm:flex items-center gap-1 text-xs border px-2 py-1 rounded-full font-medium ${colors[color]}`}>
-      {icon}
-      {label}
-    </span>
   );
 }
 

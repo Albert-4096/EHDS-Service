@@ -1,6 +1,13 @@
 import React, { useCallback, useState } from 'react';
-import { UploadCloud, FileText, ShieldCheck, Lock, Zap, FileSearch, Brain, Boxes } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ShieldCheck, Lock } from 'lucide-react';
+
+const BLUE   = '#0F2A4A';
+const ACCENT = '#3A7BD5';
+const BG     = '#F5F7FA';
+const BORDER = '#E5E9F0';
+const TEXT   = '#1A2433';
+const MUTED  = '#5B6878';
+const OK     = '#0E8559';
 
 interface UploadDropzoneProps {
   onFileSelect: (file: File, isAnonymized: boolean) => void;
@@ -9,6 +16,22 @@ interface UploadDropzoneProps {
 export function UploadDropzone({ onFileSelect }: UploadDropzoneProps) {
   const [isDragActive, setIsDragActive] = useState(false);
   const [usePillar2, setUsePillar2] = useState(false);
+  const [sampleLoading, setSampleLoading] = useState(false);
+
+  const handleSampleClick = async () => {
+    if (sampleLoading) return;
+    setSampleLoading(true);
+    try {
+      const resp = await fetch('scrisoare medicala_filled.pdf');
+      const blob = await resp.blob();
+      const file = new File([blob], 'scrisoare medicala_filled.pdf', { type: 'application/pdf' });
+      onFileSelect(file, usePillar2);
+    } catch (err) {
+      console.error('Failed to load sample:', err);
+    } finally {
+      setSampleLoading(false);
+    }
+  };
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -23,9 +46,7 @@ export function UploadDropzone({ onFileSelect }: UploadDropzoneProps) {
       e.stopPropagation();
       setIsDragActive(false);
       if (e.dataTransfer.files?.[0]) {
-        const file = e.dataTransfer.files[0];
-        if (file.type === 'application/pdf') onFileSelect(file, usePillar2);
-        else alert('Please upload a PDF file.');
+        onFileSelect(e.dataTransfer.files[0], usePillar2);
       }
     },
     [onFileSelect, usePillar2]
@@ -37,242 +58,193 @@ export function UploadDropzone({ onFileSelect }: UploadDropzoneProps) {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto pt-10 pb-4 flex flex-col items-center eu-bg">
-      {/* Hero */}
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="text-center mb-10 px-4"
-      >
-        <div className="inline-flex items-center gap-2 text-xs font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-full mb-5">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-          EU 2025/327 · EEHRxF · HL7 FHIR R4
-        </div>
-        <h1 className="text-4xl sm:text-5xl font-bold mb-4 leading-tight">
-          <span className="gradient-text">EHDS Medical</span>
-          <br />
-          <span className="text-slate-100">Data Pipeline</span>
-        </h1>
-        <p className="text-slate-400 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
-          Upload Romanian hospital discharge summaries. Our zero-trust AI pipeline extracts,
-          validates, and converts them to{' '}
-          <span className="text-slate-200 font-medium">HL7 FHIR R4 bundles</span> compliant
-          with the European Health Data Space regulation.
+    <div style={{ flex: 1, padding: '40px 56px', overflow: 'auto', animation: 'afade-in .4s ease' }}>
+      <div style={{ maxWidth: 880, margin: '0 auto' }}>
+
+        {/* Header */}
+        <div style={{ marginBottom: 8, fontSize: 12, letterSpacing: 1.5, color: MUTED, textTransform: 'uppercase', fontWeight: 600 }}>New conversion</div>
+        <h1 style={{ margin: 0, fontSize: 32, fontWeight: 600, letterSpacing: -0.6, color: BLUE }}>Upload a discharge report</h1>
+        <p style={{ marginTop: 10, color: MUTED, fontSize: 15, lineHeight: 1.55, maxWidth: 640 }}>
+          We'll convert your hospital discharge document to a compliant{' '}
+          <strong style={{ color: TEXT, fontWeight: 600 }}>FHIR R4 bundle</strong> (US Core / EHDS 2025/327).
+          Processing typically takes 10–30 seconds per document.
         </p>
-      </motion.div>
 
-      {/* Pillar toggle */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-        className="flex items-center gap-1 mb-5 bg-slate-800/60 p-1 rounded-xl border border-slate-700/50"
-      >
-        <PillarButton
-          active={!usePillar2}
-          onClick={() => setUsePillar2(false)}
-          icon={<ShieldCheck size={14} />}
-          label="Pillar 1 — Direct Care"
-          activeColor="bg-blue-600"
-        />
-        <PillarButton
-          active={usePillar2}
-          onClick={() => setUsePillar2(true)}
-          icon={<Lock size={14} />}
-          label="Pillar 2 — Anonymized"
-          activeColor="bg-teal-600"
-        />
-      </motion.div>
+        {/* Pillar toggle */}
+        <div style={{ marginTop: 24, display: 'inline-flex', alignItems: 'center', gap: 2, background: '#EAECF0', padding: 3, borderRadius: 8, border: `1px solid ${BORDER}` }}>
+          <PillarBtn
+            active={!usePillar2}
+            onClick={() => setUsePillar2(false)}
+            icon={<ShieldCheck size={13} />}
+            label="Pillar 1 — Direct Care"
+          />
+          <PillarBtn
+            active={usePillar2}
+            onClick={() => setUsePillar2(true)}
+            icon={<Lock size={13} />}
+            label="Pillar 2 — Anonymized"
+            isP2
+          />
+        </div>
+        <p style={{ marginTop: 8, fontSize: 12, color: MUTED }}>
+          {usePillar2
+            ? 'Temporal shifting (Δt) + PII stripping + k-anonymity generalization for research use'
+            : 'Full-fidelity record for authorized healthcare professionals in direct patient care'}
+        </p>
 
-      {/* Pillar description */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3, delay: 0.15 }}
-        className="text-xs text-slate-500 mb-5 text-center"
-      >
-        {usePillar2
-          ? 'Temporal shifting (Δt) + PII stripping + k-anonymity generalization for research use'
-          : 'Full fidelity record for authorized healthcare professionals in direct patient care'}
-      </motion.p>
-
-      {/* Dropzone */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className="w-full"
-      >
+        {/* Drop zone */}
         <div
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
-          className={`w-full relative rounded-2xl glass-panel p-12 text-center cursor-pointer transition-all duration-200 ${
-            isDragActive
-              ? 'border-teal-500/70 bg-teal-500/5 shadow-[0_0_40px_rgba(20,184,166,0.15)]'
-              : 'border-slate-700/60 hover:border-blue-500/40 hover:bg-slate-800/30'
-          }`}
+          style={{
+            marginTop: 28,
+            position: 'relative',
+            background: isDragActive ? '#fff' : '#FAFBFD',
+            border: `2px dashed ${isDragActive ? ACCENT : '#C9D4E2'}`,
+            borderRadius: 10,
+            padding: '56px 40px',
+            textAlign: 'center',
+            cursor: 'pointer',
+            transition: 'all .15s',
+            boxShadow: isDragActive ? `0 0 0 4px rgba(58,123,213,.1)` : 'none',
+          }}
         >
           <input
             type="file"
-            accept=".pdf"
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            accept=".pdf,.doc,.docx,.txt"
+            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
             onChange={handleChange}
           />
-          <div className="flex flex-col items-center justify-center gap-4 pointer-events-none">
-            <div
-              className={`p-5 rounded-2xl transition-all duration-200 ${
-                isDragActive ? 'bg-teal-500/20 text-teal-400' : 'bg-slate-800/80 text-blue-400'
-              }`}
-            >
-              {isDragActive ? <FileText size={44} /> : <UploadCloud size={44} />}
-            </div>
-            <div>
-              <p className="text-xl font-semibold text-white mb-1.5">
-                {isDragActive ? 'Drop PDF here' : 'Click or drag PDF to upload'}
-              </p>
-              <p className="text-slate-400 text-sm">
-                Supports digital and scanned Romanian clinical documents
-              </p>
-            </div>
-            <div className="flex gap-3 text-xs text-slate-500 mt-1">
-              <DocTypePill label="Bilet de Externare" subtitle="DOC_HDR" />
-              <DocTypePill label="Bilet de Ieșire" subtitle="DOC_BIS" />
-            </div>
+          <div style={{
+            width: 56, height: 56, margin: '0 auto 16px',
+            borderRadius: 14,
+            background: isDragActive ? BLUE : '#E8EEF6',
+            color: isDragActive ? '#fff' : BLUE,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all .15s',
+          }}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 4v12m0-12l-5 5m5-5l5 5M4 20h16"/>
+            </svg>
+          </div>
+          <div style={{ fontSize: 17, fontWeight: 600, color: TEXT }}>
+            {isDragActive ? 'Drop file here' : 'Drop a discharge report here'}
+          </div>
+          <div style={{ marginTop: 6, color: MUTED, fontSize: 14 }}>
+            or <span style={{ color: ACCENT, fontWeight: 500, textDecoration: 'underline' }}>browse your computer</span>
+          </div>
+          <div style={{ marginTop: 22, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+            {['PDF', 'DOCX', 'HL7 v2', 'CDA', 'TXT'].map((t) => (
+              <span key={t} style={{
+                fontFamily: '"IBM Plex Mono", monospace', fontSize: 11,
+                padding: '3px 9px', background: '#fff', border: `1px solid ${BORDER}`,
+                borderRadius: 4, color: MUTED,
+              }}>{t}</span>
+            ))}
+          </div>
+          <div style={{ marginTop: 14, fontSize: 12, color: MUTED }}>
+            Max 25 MB · End-to-end encrypted · HIPAA-compliant
           </div>
         </div>
-      </motion.div>
 
-      {/* Feature cards */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.35 }}
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full mt-8"
-      >
-        <FeatureCard
-          icon={<FileSearch size={20} className="text-blue-400" />}
-          title="Smart Extraction"
-          description="9-stage pipeline: OCR, zone detection, LLM-powered clinical narrative parsing via Claude."
-          color="blue"
-        />
-        <FeatureCard
-          icon={<Brain size={20} className="text-purple-400" />}
-          title="AI-Powered NLP"
-          description="Separates current visit from longitudinal history. Extracts TNM, ECOG, procedures, devices."
-          color="purple"
-        />
-        <FeatureCard
-          icon={<Boxes size={20} className="text-teal-400" />}
-          title="FHIR R4 Assembly"
-          description="Produces validated FHIR bundles with SNOMED CT, LOINC, ATC, and UCUM terminologies."
-          color="teal"
-        />
-      </motion.div>
+        {/* Sample documents */}
+        <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ flex: 1, height: 1, background: BORDER }} />
+          <span style={{ fontSize: 12, color: MUTED, textTransform: 'uppercase', letterSpacing: 1.2 }}>or try a sample</span>
+          <div style={{ flex: 1, height: 1, background: BORDER }} />
+        </div>
 
-      {/* Pipeline stages strip */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.5 }}
-        className="flex items-center gap-1 mt-8 flex-wrap justify-center"
-      >
-        {PIPELINE_STAGES.map((stage, i) => (
-          <React.Fragment key={stage}>
-            <span className="text-xs text-slate-600 font-mono bg-slate-800/50 px-2 py-0.5 rounded">
-              {stage}
-            </span>
-            {i < PIPELINE_STAGES.length - 1 && (
-              <Zap size={10} className="text-slate-700" />
+        <div style={{ marginTop: 20 }}>
+          <button
+            onClick={handleSampleClick}
+            disabled={sampleLoading}
+            style={{
+              width: '100%', textAlign: 'left', padding: '14px 16px', background: '#fff',
+              border: `1px solid ${BORDER}`, borderRadius: 8,
+              cursor: sampleLoading ? 'wait' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 14,
+              fontFamily: 'inherit', opacity: sampleLoading ? 0.7 : 1, transition: 'opacity .15s',
+            }}
+          >
+            <div style={{ width: 36, height: 44, background: BG, borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="18" height="22" viewBox="0 0 18 22" fill="none">
+                <rect x="0.5" y="0.5" width="17" height="21" rx="1.5" fill="#fff" stroke="#C9D4E2"/>
+                <path d="M4 6h10M4 10h10M4 14h7" stroke={MUTED} strokeWidth="1"/>
+              </svg>
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>Scrisoare Medicală</div>
+              <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>Romanian medical letter · Bilet de Externare</div>
+            </div>
+            {sampleLoading ? (
+              <div style={{ width: 16, height: 16, borderRadius: 8, border: `2px solid ${ACCENT}`, borderTopColor: 'transparent', animation: 'aspin .8s linear infinite', flexShrink: 0 }} />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={ACCENT} strokeWidth="1.8" strokeLinecap="round" style={{ flexShrink: 0 }}>
+                <path d="M6 4l4 4-4 4"/>
+              </svg>
             )}
-          </React.Fragment>
-        ))}
-      </motion.div>
+          </button>
+        </div>
+
+        {/* Compliance footer */}
+        <div style={{
+          marginTop: 28, padding: '14px 18px', background: '#fff',
+          border: `1px solid ${BORDER}`, borderRadius: 8,
+          display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: MUTED,
+        }}>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke={OK} strokeWidth="1.8">
+            <path d="M9 1l7 4v5c0 4-3.5 6.5-7 7-3.5-.5-7-3-7-7V5l7-4z"/>
+            <path d="M5.5 9l2.5 2.5L12.5 7"/>
+          </svg>
+          <span>
+            <strong style={{ color: TEXT, fontWeight: 600 }}>Compliance:</strong>{' '}
+            EHDS 2025/327 · HIPAA · GDPR · HL7 FHIR R4 · Bundles signed under audit trail
+          </span>
+        </div>
+
+        {/* Pipeline stages strip */}
+        <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {PIPELINE_STAGES.map((stage, i) => (
+            <React.Fragment key={stage}>
+              <span style={{ fontSize: 11, color: MUTED, fontFamily: '"IBM Plex Mono", monospace', background: '#EAECF0', padding: '3px 8px', borderRadius: 4 }}>{stage}</span>
+              {i < PIPELINE_STAGES.length - 1 && (
+                <span style={{ color: '#C9D4E2', fontSize: 11 }}>›</span>
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
 const PIPELINE_STAGES = [
-  'PDF Forensics',
-  'Text Extract',
-  'Classify',
-  'Zone Detect',
-  'Structured Fields',
-  'Labs',
-  'Checkboxes',
-  'LLM Epicriza',
-  'Medications',
-  'FHIR Assembly',
-  'Bundle',
-  'HAPI Upload',
+  'PDF Forensics', 'Text Extract', 'Classify', 'Zone Detect',
+  'Structured Fields', 'Labs', 'LLM Epicriza', 'Medications', 'FHIR Assembly', 'Bundle',
 ];
 
-function PillarButton({
-  active,
-  onClick,
-  icon,
-  label,
-  activeColor,
+function PillarBtn({
+  active, onClick, icon, label, isP2,
 }: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  activeColor: string;
+  active: boolean; onClick: () => void; icon: React.ReactNode; label: string; isP2?: boolean;
 }) {
+  const activeBg = isP2 ? '#0D6E5A' : BLUE;
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-        active ? `${activeColor} text-white shadow-lg` : 'text-slate-400 hover:text-white'
-      }`}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 7,
+        padding: '7px 14px', borderRadius: 6, border: 'none',
+        background: active ? activeBg : 'transparent',
+        color: active ? '#fff' : MUTED,
+        fontFamily: 'inherit', fontSize: 13, fontWeight: 500,
+        cursor: 'pointer', transition: 'all .15s', whiteSpace: 'nowrap',
+      }}
     >
       {icon}
       {label}
     </button>
-  );
-}
-
-function FeatureCard({
-  icon,
-  title,
-  description,
-  color,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  color: 'blue' | 'purple' | 'teal';
-}) {
-  const border = {
-    blue: 'border-blue-500/20 hover:border-blue-500/40',
-    purple: 'border-purple-500/20 hover:border-purple-500/40',
-    teal: 'border-teal-500/20 hover:border-teal-500/40',
-  }[color];
-
-  const bg = {
-    blue: 'bg-blue-500/8',
-    purple: 'bg-purple-500/8',
-    teal: 'bg-teal-500/8',
-  }[color];
-
-  return (
-    <div className={`glass-panel rounded-xl p-4 border ${border} ${bg} transition-all duration-200`}>
-      <div className="mb-2">{icon}</div>
-      <h3 className="text-sm font-semibold text-slate-100 mb-1">{title}</h3>
-      <p className="text-xs text-slate-400 leading-relaxed">{description}</p>
-    </div>
-  );
-}
-
-function DocTypePill({ label, subtitle }: { label: string; subtitle: string }) {
-  return (
-    <span className="flex items-center gap-1.5 bg-slate-800/60 border border-slate-700/60 px-2.5 py-1 rounded-full">
-      <FileText size={11} className="text-slate-500" />
-      <span className="text-slate-400">{label}</span>
-      <span className="text-slate-600 font-mono">{subtitle}</span>
-    </span>
   );
 }

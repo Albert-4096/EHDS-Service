@@ -1,6 +1,7 @@
 import tempfile
 import traceback
 import hashlib
+import magic
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from app.config import settings
@@ -22,8 +23,30 @@ from app.utils.logger import get_logger
 router = APIRouter()
 logger = get_logger()
 
+_ALLOWED_MIME_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/tiff"}
+_MAX_FILE_SIZE_MB = 20
 
-async def process_file_pipeline(file: UploadFile) -> tuple:
+
+def _pseudo(value: str) -> str:
+    """One-way pseudonym for log-safe PHI reference."""
+    if not value:
+        return "[absent]"
+    return "pseudo:" + hashlib.sha256(value.encode()).hexdigest()[:8]
+
+
+async def _validate_upload(file: UploadFile) -> bytes:
+    """Read file once, enforce size limit and magic-byte MIME check."""
+    content = await file.read()
+    if len(content) > _MAX_FILE_SIZE_MB * 1024 * 1024:
+        raise HTTPException(413, f"File exceeds {_MAX_FILE_SIZE_MB}MB limit")
+    detected_mime = magic.from_buffer(content[:2048], mime=True)
+    if detected_mime not in _ALLOWED_MIME_TYPES:
+        logger.warning(f"Rejected upload '{file.filename}': detected MIME {detected_mime}")
+        raise HTTPException(415, f"Unsupported file type: {detected_mime}")
+    return content
+
+
+async def process_file_pipeline(file: UploadFile, content: bytes) -> tuple:
     """
     Executes the extraction pipeline up to the merge_and_validate stage.
     Returns (MergedRecord, DocumentType, str)
@@ -34,13 +57,14 @@ async def process_file_pipeline(file: UploadFile) -> tuple:
     if not suffix:
         suffix = ".pdf"
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        content = await file.read()
-        file_hash = hashlib.sha256(content).hexdigest()
-        tmp.write(content)
-        tmp_path = Path(tmp.name)
-
+    # Priority 2: initialize before try so finally can always reference it
+    tmp_path = None
     try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            file_hash = hashlib.sha256(content).hexdigest()
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
+
         logger.debug(f"Stage 0: Analyzing forensics for {tmp_path}")
         forensics = detect_file_type(tmp_path)
         logger.debug(
@@ -58,15 +82,16 @@ async def process_file_pipeline(file: UploadFile) -> tuple:
             await extract_all(text)
         )
 
+        # Priority 1: pseudonymized references — no PHI in logs
         logger.info(
-            f"Stage 4 extracted — type: {doc_type.value}, patient: '{structured.nume}', "
-            f"cnp: '{structured.cnp}', diagnosis: '{structured.diagnostic_principal}', "
+            f"Stage 4 extracted — type: {doc_type.value}, "
+            f"patient_ref: {_pseudo(structured.nume)}, "
+            f"cnp_ref: {_pseudo(structured.cnp)}, "
+            f"has_diagnosis: {bool(structured.diagnostic_principal)}, "
             f"labs: {sum(len(d) for d in [labs.cbc, labs.biochemistry, labs.hormones, labs.other])} values, "
-            f"meds: {len(medications)}, "
-            f"epicriza_fields: motive={bool(epicriza.motive_internare)}, "
-            f"narrative={bool(epicriza.current_treatment_narrative)}, "
-            f"history={bool(epicriza.antecedente_personale)}"
+            f"meds: {len(medications)}"
         )
+
         logger.debug("Stage 4c: Mapping AcroForm checkboxes")
         admin_checkboxes = map_checkboxes(raw_checkboxes)
 
@@ -99,9 +124,10 @@ async def process_file_pipeline(file: UploadFile) -> tuple:
         logger.error(f"Pipeline error: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        if tmp_path.exists():
-            logger.debug(f"Cleaning up temporary file {tmp_path}")
-            tmp_path.unlink()
+        # Priority 2: guaranteed deletion even on exception at any pipeline stage
+        if tmp_path and tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+            logger.debug(f"Source file deleted: {tmp_path.name}")
 
 
 @router.post("/extract/primary")
@@ -112,12 +138,9 @@ async def extract_primary(background_tasks: BackgroundTasks, file: UploadFile = 
     Uploads the bundle to the HAPI FHIR server in the background.
     """
     logger.info("Processing primary extraction request.")
-    supported_exts = (".pdf", ".jpg", ".jpeg", ".png", ".docx")
-    if not file.filename.lower().endswith(supported_exts):
-        logger.warning(f"Invalid file upload attempted: {file.filename}")
-        raise HTTPException(status_code=400, detail="Unsupported file format")
+    content = await _validate_upload(file)
 
-    merged_record, doc_type, file_hash = await process_file_pipeline(file)
+    merged_record, doc_type, file_hash = await process_file_pipeline(file, content)
 
     logger.debug("Stage 6: Building FHIR resources")
     fhir_resources = build_fhir_resources(merged_record)
@@ -140,16 +163,13 @@ async def extract_secondary(background_tasks: BackgroundTasks, file: UploadFile 
     Uploads the bundle to the HAPI FHIR server in the background.
     """
     logger.info("Processing secondary (anonymized) extraction request.")
-    supported_exts = (".pdf", ".jpg", ".jpeg", ".png", ".docx")
-    if not file.filename.lower().endswith(supported_exts):
-        logger.warning(f"Invalid file upload attempted: {file.filename}")
-        raise HTTPException(status_code=400, detail="Unsupported file format")
+    content = await _validate_upload(file)
 
-    merged_record, doc_type, file_hash = await process_file_pipeline(file)
+    merged_record, doc_type, file_hash = await process_file_pipeline(file, content)
 
     if merged_record.structured.cnp:
         if merged_record.structured.cnp.endswith("0000"):
-            logger.warning(f"Patient {merged_record.structured.cnp} has opted out of secondary use.")
+            logger.warning(f"Opt-out flag detected for cnp_ref: {_pseudo(merged_record.structured.cnp)}")
             raise HTTPException(status_code=403, detail="Patient opted out of secondary use.")
 
     logger.info("Stage 8: Anonymizing record for Pillar 2 compliance")

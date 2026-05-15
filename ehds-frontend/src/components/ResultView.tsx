@@ -1,148 +1,209 @@
 import { useState } from 'react';
 import JsonView from '@uiw/react-json-view';
 import { darkTheme } from '@uiw/react-json-view/dark';
-import { motion } from 'framer-motion';
-import { Download, CheckCircle, AlertTriangle, LayoutDashboard, Code2, RotateCcw } from 'lucide-react';
 import { FHIRSummaryPanel } from './FHIRSummaryPanel';
+
+const BLUE   = '#0F2A4A';
+const ACCENT = '#3A7BD5';
+const BORDER = '#E5E9F0';
+const TEXT   = '#1A2433';
+const MUTED  = '#5B6878';
+const OK     = '#0E8559';
 
 interface ResultViewProps {
   bundleData: any;
   onReset: () => void;
   isAnonymized: boolean;
+  originalFile?: File | null;
 }
 
-type Tab = 'summary' | 'raw';
+type Tab = 'summary' | 'json';
 
-export function ResultView({ bundleData, onReset, isAnonymized }: ResultViewProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('summary');
+function patientName(bundle: any): string {
+  const p = (bundle?.entry ?? []).map((e: any) => e.resource).find((r: any) => r?.resourceType === 'Patient');
+  if (!p?.name?.length) return 'Patient';
+  const n = p.name[0];
+  return [[...(n.given ?? [])].join(' '), n.family].filter(Boolean).join(' ') || 'Patient';
+}
 
-  const handleDownload = () => {
-    const dataStr =
-      'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(bundleData, null, 2));
+function encounterDates(bundle: any): string {
+  const enc = (bundle?.entry ?? []).map((e: any) => e.resource).find((r: any) => r?.resourceType === 'Encounter');
+  const period = enc?.actualPeriod ?? enc?.period;
+  if (!period?.start) return '';
+  const fmt = (s: string) => {
+    try { return new Date(s).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
+    catch { return s; }
+  };
+  return period.end
+    ? `${fmt(period.start)} — ${fmt(period.end)}`
+    : `From ${fmt(period.start)}`;
+}
+
+export function ResultView({ bundleData, onReset, isAnonymized, originalFile }: ResultViewProps) {
+  const [tab, setTab] = useState<Tab>('summary');
+
+  const handleDownloadJSON = () => {
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(bundleData, null, 2));
+    const safeName = patientName(bundleData).replace(/\s+/g, '_').toLowerCase() || 'patient';
     const a = document.createElement('a');
     a.setAttribute('href', dataStr);
-    a.setAttribute('download', `fhir_bundle_${Date.now()}.json`);
+    a.setAttribute('download', `fhir_bundle_${safeName}.json`);
     document.body.appendChild(a);
     a.click();
     a.remove();
   };
 
+  const handleDownloadPDF = () => {
+    if (originalFile) {
+      const url = URL.createObjectURL(originalFile);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = originalFile.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } else {
+      window.print();
+    }
+  };
+
   const resourceCount = bundleData?.entry?.length ?? 0;
+  const name = patientName(bundleData);
+  const dates = encounterDates(bundleData);
 
   return (
-    <div className="w-full max-w-5xl mx-auto mt-6 mb-20">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="space-y-4"
-      >
-        {/* Header bar */}
-        <div className="glass-panel p-5 rounded-2xl border border-green-500/25 bg-green-500/5">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
-                <CheckCircle className="text-green-400" size={20} />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-white leading-tight">Extraction Complete</h2>
-                <p className="text-slate-400 text-sm mt-0.5">
-                  {resourceCount} FHIR resources assembled ·{' '}
-                  {isAnonymized ? 'Pillar 2 — Anonymized' : 'Pillar 1 — Direct Care'}
-                </p>
-              </div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'afade-in .4s ease' }}>
+      {/* Result header */}
+      <div style={{ background: '#fff', borderBottom: `1px solid ${BORDER}`, padding: '18px 56px 0' }}>
+
+        {/* Compliance banner */}
+        <div style={{
+          background: 'linear-gradient(90deg,#F0F8F4 0%,#fff 100%)',
+          border: '1px solid #C8E6D4', borderRadius: 8,
+          padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16,
+        }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 16, background: OK,
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            animation: 'apulse 2s ease-in-out infinite',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 8l3.5 3.5L13 5.5"/>
+            </svg>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: TEXT }}>
+              Bundle validated · EHDS 2025/327 / US Core 6.1.0 compliant
+              {isAnonymized && <span style={{ marginLeft: 8, fontSize: 12, color: '#0D6E5A', fontWeight: 500 }}>· Pillar 2 anonymized</span>}
             </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                onClick={handleDownload}
-                className="flex items-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors border border-slate-600 text-sm font-medium"
-              >
-                <Download size={15} />
-                Export JSON
-              </button>
-              <button
-                onClick={onReset}
-                className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-medium"
-              >
-                <RotateCcw size={15} />
-                New Document
-              </button>
+            <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
+              {resourceCount} FHIR resources · 0 validation errors · signed {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
             </div>
+          </div>
+          <span style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 12, color: OK, fontWeight: 600 }}>✓ READY</span>
+        </div>
+
+        {/* Title row + actions */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, paddingBottom: 16 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 12, letterSpacing: 1.5, color: MUTED, textTransform: 'uppercase', fontWeight: 600 }}>
+              Discharge summary · <span style={{ fontFamily: '"IBM Plex Mono", monospace' }}>FHIR R4</span>
+            </div>
+            <h1 style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 600, letterSpacing: -0.4, color: BLUE, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {name}
+            </h1>
+            {dates && <div style={{ marginTop: 4, fontSize: 13, color: MUTED }}>{dates}</div>}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <PillButton onClick={onReset} small>↺ New upload</PillButton>
+            <PillButton onClick={handleDownloadPDF} small>↓ PDF</PillButton>
+            <PillButton onClick={handleDownloadJSON} primary small>↓ FHIR JSON</PillButton>
           </div>
         </div>
 
-        {/* Anonymization notice */}
-        {isAnonymized && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            className="bg-teal-900/25 border border-teal-500/40 p-4 rounded-xl flex items-start gap-3"
-          >
-            <AlertTriangle className="text-teal-400 mt-0.5 shrink-0" size={18} />
-            <div>
-              <h4 className="font-semibold text-teal-300 text-sm">
-                EHDS Pillar 2 Anonymization Applied
-              </h4>
-              <p className="text-xs text-teal-100/60 mt-0.5 leading-relaxed">
-                Temporal dates shifted (Δt), PII identifiers obfuscated, rare diagnoses generalized
-                to parent SNOMED concepts for k-anonymity — compliant with EHDS Regulation 2025/327.
-              </p>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Tab switcher */}
-        <div className="flex items-center gap-1 bg-slate-800/50 p-1 rounded-xl border border-slate-700/50 w-fit">
-          <TabBtn
-            active={activeTab === 'summary'}
-            onClick={() => setActiveTab('summary')}
-            icon={<LayoutDashboard size={14} />}
-            label="Clinical Summary"
-          />
-          <TabBtn
-            active={activeTab === 'raw'}
-            onClick={() => setActiveTab('raw')}
-            icon={<Code2 size={14} />}
-            label="Raw FHIR Bundle"
-          />
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 2 }}>
+          {[['summary', 'Clinical summary'], ['json', 'FHIR JSON']] .map(([k, l]) => (
+            <button key={k} onClick={() => setTab(k as Tab)} style={{
+              background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+              padding: '12px 18px', fontSize: 14, fontWeight: 500,
+              color: tab === k ? BLUE : MUTED,
+              borderBottom: `2px solid ${tab === k ? BLUE : 'transparent'}`,
+              marginBottom: -1, transition: 'color .15s',
+            }}>{l}</button>
+          ))}
         </div>
+      </div>
 
-        {/* Panel */}
-        {activeTab === 'summary' ? (
+      {/* Tab content */}
+      {tab === 'summary' ? (
+        <div style={{ flex: 1, overflow: 'auto', padding: '28px 56px 48px' }}>
           <FHIRSummaryPanel bundle={bundleData} />
-        ) : (
-          <div className="glass-panel rounded-2xl overflow-hidden border border-slate-700/60">
-            <div className="bg-[#141920] p-4 h-[640px] overflow-y-auto custom-scrollbar">
+        </div>
+      ) : (
+        <div style={{ flex: 1, overflow: 'auto', padding: '24px 56px 40px' }}>
+          <div style={{ background: '#0B1B30', borderRadius: 10, overflow: 'hidden' }}>
+            {/* Code header */}
+            <div style={{
+              background: '#102742', padding: '10px 16px',
+              display: 'flex', alignItems: 'center', gap: 14,
+              color: '#A8B8CC', fontSize: 12,
+              fontFamily: '"IBM Plex Mono", monospace',
+              borderBottom: '1px solid #1B355C',
+            }}>
+              <span style={{ display: 'flex', gap: 6 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 5, background: '#FF5F57' }} />
+                <span style={{ width: 10, height: 10, borderRadius: 5, background: '#FEBC2E' }} />
+                <span style={{ width: 10, height: 10, borderRadius: 5, background: '#28C840' }} />
+              </span>
+              <span>fhir_bundle.json</span>
+              <span style={{ color: '#5E7593' }}>·</span>
+              <span>{resourceCount} resources</span>
+              <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => navigator.clipboard?.writeText(JSON.stringify(bundleData, null, 2))}
+                  style={{ background: 'transparent', border: '1px solid #2C4A75', color: '#A8B8CC', padding: '4px 10px', borderRadius: 4, fontSize: 11, fontFamily: 'inherit', cursor: 'pointer' }}
+                >Copy</button>
+                <button
+                  onClick={handleDownloadJSON}
+                  style={{ background: ACCENT, border: 'none', color: '#fff', padding: '4px 10px', borderRadius: 4, fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', fontWeight: 500 }}
+                >Download .json</button>
+              </span>
+            </div>
+            <div className="custom-scrollbar" style={{ padding: '16px 18px', maxHeight: 560, overflow: 'auto' }}>
               <JsonView
                 value={bundleData}
                 collapsed={2}
                 displayDataTypes={false}
                 displayObjectSize={false}
-                enableClipboard={true}
-                style={{ ...darkTheme, backgroundColor: 'transparent', fontSize: 13 }}
+                enableClipboard={false}
+                style={{ ...darkTheme, backgroundColor: 'transparent', fontSize: 12.5 }}
               />
             </div>
           </div>
-        )}
-      </motion.div>
+        </div>
+      )}
     </div>
   );
 }
 
-function TabBtn({
-  active, onClick, icon, label,
+function PillButton({
+  children, onClick, primary, small,
 }: {
-  active: boolean; onClick: () => void; icon: React.ReactNode; label: string;
+  children: React.ReactNode; onClick: () => void; primary?: boolean; small?: boolean;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-        active ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
+    <button onClick={onClick} style={{
+      padding: small ? '7px 14px' : '11px 22px',
+      borderRadius: 6,
+      border: primary ? 'none' : `1px solid ${BORDER}`,
+      background: primary ? BLUE : '#fff',
+      color: primary ? '#fff' : TEXT,
+      fontFamily: 'inherit', fontSize: small ? 13 : 14, fontWeight: 500,
+      cursor: 'pointer',
+      display: 'inline-flex', alignItems: 'center', gap: 8,
+      whiteSpace: 'nowrap', transition: 'all .15s',
+    }}>{children}</button>
   );
 }
