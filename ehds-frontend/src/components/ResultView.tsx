@@ -174,7 +174,7 @@ export function ResultView({ bundleData, onReset, isAnonymized, originalFile }: 
             <div className="custom-scrollbar" style={{ padding: '16px 18px', maxHeight: 560, overflow: 'auto' }}>
               <JsonView
                 value={bundleData}
-                collapsed={2}
+                collapsed={false}
                 displayDataTypes={false}
                 displayObjectSize={false}
                 enableClipboard={false}
