@@ -22,12 +22,35 @@ async def upload_to_fhir(bundle: Bundle, base_url: str) -> dict:
     results = []
     errors = []
 
+    # Resource upload priority to resolve dependencies (e.g., Patient before Composition)
+    PRIORITY = {
+        "Patient": 0,
+        "Practitioner": 1,
+        "Organization": 1,
+        "Location": 1,
+        "Encounter": 2,
+        "Condition": 3,
+        "Procedure": 3,
+        "MedicationRequest": 3,
+        "Medication": 3,
+        "Observation": 3,
+        "DiagnosticReport": 3,
+        "Composition": 10,
+        "Provenance": 20,
+    }
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         if not bundle.entry:
             logger.warning("Bundle has no entries – nothing to upload.")
             return {"uploaded": 0, "errors": []}
 
-        for entry in bundle.entry:
+        # Sort entries by priority (default 5 for unknown types)
+        sorted_entries = sorted(
+            bundle.entry,
+            key=lambda e: PRIORITY.get(e.resource.get_resource_type(), 5) if e.resource else 99
+        )
+
+        for entry in sorted_entries:
             resource = entry.resource
             if resource is None:
                 continue

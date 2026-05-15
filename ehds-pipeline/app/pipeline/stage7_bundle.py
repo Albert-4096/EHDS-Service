@@ -72,7 +72,7 @@ def assemble_bundle(resources: List[DomainResource], doc_type: DocumentType, med
     
     # Append Provenance if file hash is provided
     if file_hash:
-        prov = build_provenance(f"urn:uuid:{composition.id}", file_hash)
+        prov = build_provenance(f"Composition/{composition.id}", file_hash)
         prov_entry = BundleEntry()
         prov_entry.fullUrl = f"urn:uuid:{prov.id}"
         prov_entry.resource = prov

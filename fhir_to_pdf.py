@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-fhir_discharge_pdf.py
+fhir_to_pdf.py
 ─────────────────────
-Generate a hospital-style Discharge Summary PDF from a FHIR R4 Bundle (JSON).
+Generează fișiere PDF (Bilet de ieșire) din Bundle-uri FHIR R4 (JSON).
 
 Usage:
-    python fhir_discharge_pdf.py <input.json> [output.pdf]
+    python fhir_to_pdf.py <input_path> [output_path]
 
-    If output path is omitted, the file is written next to the input as
-    <patient_name>_discharge_summary.pdf.
+    <input_path> poate fi un singur fișier .json sau un director cu fișiere .json.
+    Dacă calea de ieșire este omisă, PDF-urile sunt salvate în același director,
+    cu numele <nume_pacient>_bilet_iesire.pdf.
 
-Supported FHIR resource types parsed from the bundle:
+Supported FHIR resource types:
     Patient, Encounter, Condition, Procedure, MedicationRequest,
     Organization, Practitioner
 """
@@ -146,7 +147,7 @@ def parse_fhir(bundle: dict) -> dict:
         (n for n in patient_res.get("name", []) if n.get("use") == "official"),
         patient_res.get("name", [{}])[0] if patient_res.get("name") else {}
     )
-    family = official.get("family", "Unknown")
+    family = official.get("family", "Necunoscut")
     given  = " ".join(official.get("given", []))
     prefix = " ".join(official.get("prefix", []))
     full_name = f"{family.upper()} {given.upper()}"
@@ -157,7 +158,7 @@ def parse_fhir(bundle: dict) -> dict:
     age      = _calc_age(dob_raw)
 
     gender_raw = patient_res.get("gender", "unknown")
-    gender = {"male": "Male", "female": "Female"}.get(gender_raw, gender_raw.capitalize())
+    gender = {"male": "Masculin", "female": "Feminin"}.get(gender_raw, gender_raw.capitalize())
 
     addr = (patient_res.get("address") or [{}])[0]
     address_line = ", ".join(addr.get("line", [])) or "N/A"
@@ -189,7 +190,7 @@ def parse_fhir(bundle: dict) -> dict:
 
     enc_type_text = (
         (encounter_res.get("type") or [{}])[0]
-        .get("text", "General Encounter")
+        .get("text", "Consult General")
     )
 
     service_provider = (
@@ -210,7 +211,7 @@ def parse_fhir(bundle: dict) -> dict:
          service_provider.lower() in o.get("name", "").lower()),
         orgs[0] if orgs else {}
     )
-    hospital_name = hospital_org.get("name", service_provider or "Medical Center")
+    hospital_name = hospital_org.get("name", service_provider or "Centru Medical")
     hosp_addr = (hospital_org.get("address") or [{}])[0]
     hosp_line = ", ".join(hosp_addr.get("line", []))
     hosp_city = hosp_addr.get("city", "")
@@ -379,7 +380,7 @@ def _split_diagnoses(enc_conditions: list, all_conditions: list) -> tuple:
     texts = [c["code"]["text"] for c in sorted_conds if "text" in c.get("code", {})]
     texts = list(dict.fromkeys(texts))  # deduplicate, preserve order
 
-    primary = texts[0].upper() if texts else "PRIMARY DIAGNOSIS NOT SPECIFIED"
+    primary = texts[0].upper() if texts else "DIAGNOSTIC PRINCIPAL NESPECIFICAT"
     secondary = texts[1:] if len(texts) > 1 else []
     return primary, secondary
 
@@ -429,32 +430,43 @@ def _infer_department(primary_dx: str, enc_type: str) -> str:
     dx = primary_dx.lower()
     et = enc_type.lower()
     if any(k in dx for k in ["fracture", "bone", "clavicle", "femur", "ortho"]):
-        return "ORTHOPEDICS & TRAUMATOLOGY"
+        return "ORTOPEDIE ȘI TRAUMATOLOGIE"
     if any(k in dx for k in ["cardiac", "heart", "myocardial", "coronary"]):
-        return "CARDIOLOGY"
+        return "CARDIOLOGIE"
     if any(k in dx for k in ["colon", "polyp", "rectal", "gastrointestinal"]):
-        return "GASTROENTEROLOGY"
+        return "GASTROENTEROLOGIE"
     if "emergency" in et:
-        return "EMERGENCY MEDICINE"
-    return "INTERNAL MEDICINE"
+        return "MEDICINĂ DE URGENȚĂ"
+    return "MEDICINĂ INTERNĂ"
 
 
 def _build_epicrisis(name, age, gender, primary_dx, secondary_dx,
                      procedures, conditions, admit_raw, discharge_raw) -> str:
     admit_fmt    = _fmt_date(admit_raw)
     discharge_fmt= _fmt_date(discharge_raw)
-    secondary_str = (", ".join(secondary_dx[:3]) + ".") if secondary_dx else "no significant secondary pathology."
-    proc_str = (", ".join(procedures[:4]) + ".") if procedures else "standard clinical management."
+    secondary_str = (", ".join(secondary_dx[:3]) + ".") if secondary_dx else "lipsa patologiei secundare semnificative."
+    proc_str = (", ".join(procedures[:4]) + ".") if procedures else "management clinic standard."
+
+    gender_ro = gender.lower()
+    if gender_ro == "masculin":
+        pacient_str = "Pacientul"
+        prezinta_str = "prezintă"
+    elif gender_ro == "feminin":
+        pacient_str = "Pacienta"
+        prezinta_str = "prezintă"
+    else:
+        pacient_str = "Pacientul/a"
+        prezinta_str = "prezintă"
 
     return (
-        f"Patient {name}, {gender.lower()}, {age} years old, was admitted on {admit_fmt} "
-        f"and discharged on {discharge_fmt}. "
-        f"The patient presents with {primary_dx.lower()}, with a known history of {secondary_str} "
-        f"Following clinical and paraclinical examination, the discharge diagnosis was confirmed as "
+        f"{pacient_str} {name}, sex {gender_ro}, vârstă {age} ani, a fost internat(ă) la data de {admit_fmt} "
+        f"și externat(ă) la data de {discharge_fmt}. "
+        f"{pacient_str} se {prezinta_str} cu {primary_dx.lower()}, având în antecedente {secondary_str} "
+        f"În urma examenului clinic și paraclinic, diagnosticul de externare a fost confirmat ca "
         f"{primary_dx}. "
-        f"During the hospitalization period, the following procedures were performed: {proc_str} "
-        f"The patient's condition at discharge is stable and the patient has been informed of the "
-        f"outpatient follow-up plan detailed below."
+        f"Pe durata spitalizării au fost efectuate următoarele proceduri: {proc_str} "
+        f"Starea pacientului la externare este stabilă, acesta fiind informat cu privire la planul de "
+        f"monitorizare ambulatorie detaliat mai jos."
     )
 
 
@@ -466,39 +478,39 @@ def _build_recommendations(primary_dx: str, procedures: list,
     # Mobility
     if any(k in dx for k in ["fracture", "bone", "ortho"]):
         recs.append({
-            "title": "Immobilization & Mobility",
-            "body": "Non-weight-bearing mobilization of the affected limb for 6 weeks using a sling or appropriate orthotic device.",
+            "title": "Imobilizare și Mobilitate",
+            "body": "Mobilizarea fără sprijin a membrului afectat timp de 6 săptămâni, utilizând o eșarfă sau un dispozitiv ortotic adecvat.",
         })
     else:
         recs.append({
-            "title": "Mobility",
-            "body": "Gradual return to normal physical activity as tolerated. Avoid strenuous exertion for 2–4 weeks.",
+            "title": "Mobilitate",
+            "body": "Reluarea treptată a activității fizice normale, în limita toleranței. Se va evita efortul fizic intens timp de 2–4 săptămâni.",
         })
 
     # Positioning
     recs.append({
-        "title": "Positioning",
-        "body": "Elevate the affected extremity when at rest to minimize edema.",
+        "title": "Poziționare",
+        "body": "Menținerea membrului afectat în poziție proclivă (elevată) în repaus pentru a minimiza edemul.",
     })
 
     # Physical therapy
     recs.append({
-        "title": "Physical Therapy",
-        "body": "Outpatient physical therapy program for range-of-motion restoration and progressive strengthening. Initiate at 2–4 weeks post-discharge.",
+        "title": "Kinetoterapie",
+        "body": "Program de recuperare medicală în ambulatoriu pentru restabilirea mobilității și tonifierea musculară progresivă. Inițierea se va face la 2–4 săptămâni post-externare.",
     })
 
     # Wound care
     if any("admission" in p.lower() or "surgery" in p.lower() or "procedure" in p.lower()
            for p in procedures):
         recs.append({
-            "title": "Wound Care",
-            "body": "Suture / staple removal at 14 days post-procedure. Keep wound dry and clean. Report signs of infection (redness, discharge, fever) immediately.",
+            "title": "Îngrijirea Plăgii",
+            "body": "Suprimarea firelor de sutură / agrafelor la 14 zile post-procedură. Se va menține plaga curată și uscată. Raportați imediat orice semne de infecție (roșeață, secreții, febră).",
         })
 
     # Medications
-    med_block = {"title": "Pharmacological Treatment", "body": "", "lines": []}
+    med_block = {"title": "Tratament Farmacologic", "body": "", "lines": []}
     if medications:
-        med_block["body"] = "Continue the following medications as prescribed:"
+        med_block["body"] = "Se va continua următorul tratament medicamentos conform prescripției:"
         for m in medications:
             line = m["name"]
             if m["dosage"]:
@@ -506,21 +518,21 @@ def _build_recommendations(primary_dx: str, procedures: list,
             med_block["lines"].append(line)
     else:
         med_block["body"] = (
-            "Analgesic / anti-inflammatory treatment as needed (consult your physician "
-            "before purchasing OTC medication if you have comorbidities)."
+            "Tratament analgezic / antiinflamator la nevoie (consultați medicul înainte de a "
+            "achiziționa medicamente fără rețetă dacă aveți comorbidități)."
         )
     recs.append(med_block)
 
     # Follow-up
     recs.append({
-        "title": "Follow-up Appointment",
-        "body": f"Outpatient review with {attending} at 6 weeks post-discharge (or sooner if symptoms worsen).",
+        "title": "Control Medical",
+        "body": f"Control în ambulatoriu la dr. {attending} la 6 săptămâni post-externare (sau mai devreme dacă simptomele se agravează).",
     })
 
     # Sick leave / CM
     recs.append({
-        "title": "Medical Certificate",
-        "body": "Sick leave certificate issued for the hospitalization period plus 14 additional days from discharge, with possibility of extension by the territorial outpatient clinic.",
+        "title": "Concediu Medical",
+        "body": "Certificat de concediu medical eliberat pentru perioada spitalizării plus 14 zile post-externare, cu posibilitatea prelungirii prin ambulatoriul de specialitate.",
     })
 
     return recs
@@ -594,8 +606,8 @@ def build_pdf(data: dict, output_path: str):
         Paragraph(f"Tel: {data['hospital_phone']}", styles["address_small"]),
     ]
     header_right = [
-        Paragraph("<i>Blood type:</i>  ___________   <i>Rh:</i> ___", styles["blood_label"]),
-        Paragraph("<i>Allergies:</i>  ________________________________", styles["blood_label"]),
+        Paragraph("<i>Grup sangvin:</i>  ___________   <i>Rh:</i> ___", styles["blood_label"]),
+        Paragraph("<i>Alergii:</i>  ________________________________", styles["blood_label"]),
     ]
 
     header_table = Table(
@@ -615,23 +627,23 @@ def build_pdf(data: dict, output_path: str):
     story.append(Spacer(1, 5 * mm))
 
     # ── DOCUMENT TITLE ────────────────────────────────────────────────────────
-    story.append(Paragraph("DISCHARGE SUMMARY", styles["doc_title"]))
+    story.append(Paragraph("BILET DE IEȘIRE / SCRISOARE MEDICALĂ", styles["doc_title"]))
     story.append(_hr(color=C_ACCENT, thickness=1.2, space_before=2, space_after=6))
 
     # ── PATIENT INFO GRID ────────────────────────────────────────────────────
     info_rows = [
-        ("Sheet No.:",        data["sheet_number"],
-         "Full Name:",        data["patient_name"]),
-        ("Presentation Code:",data["presentation_code"],
+        ("FOCG Nr.:",         data["sheet_number"],
+         "Nume și Prenume:",  data["patient_name"]),
+        ("Cod Prezentare:",   data["presentation_code"],
          "Sex:",              data["gender"]),
-        ("Age:",              f"{data['age']} years",
-         "City:",             data["city"].upper()),
-        ("Locality:",         data["city"],
-         "State:",            data["state"]),
-        ("Address:",          data["address"],
-         "Phone:",            data["phone"]),
-        ("Admission Date:",   data["admit_date"],
-         "Discharge Date:",   data["discharge_date"]),
+        ("Vârstă:",           f"{data['age']} ani",
+         "Oraș:",             data["city"].upper()),
+        ("Localitate:",       data["city"],
+         "Județ:",            data["state"]),
+        ("Adresă:",           data["address"],
+         "Telefon:",          data["phone"]),
+        ("Data Internării:",  data["admit_date"],
+         "Data Externării:",  data["discharge_date"]),
     ]
     story.append(_info_table(info_rows, styles))
     story.append(Spacer(1, 4 * mm))
@@ -639,26 +651,26 @@ def build_pdf(data: dict, output_path: str):
                      space_before=1, space_after=4))
 
     # ── DISCHARGE DIAGNOSIS ───────────────────────────────────────────────────
-    story.append(_section_title("Discharge Diagnosis:", styles))
+    story.append(_section_title("Diagnostic de Externare:", styles))
     story.append(Paragraph(f"<b>{data['primary_dx']}</b>",
                             ParagraphStyle("dx", fontName="Helvetica-Bold",
                                            fontSize=9.5, textColor=C_BLACK,
                                            spaceBefore=2, spaceAfter=2)))
 
     if data["secondary_dx"]:
-        story.append(_section_title("Secondary Diagnoses:", styles))
+        story.append(_section_title("Diagnostice Secundare:", styles))
         for sdx in data["secondary_dx"]:
             story.append(Paragraph(sdx, styles["body"]))
 
     story.append(Spacer(1, 3 * mm))
 
     # ── EPICRISIS ─────────────────────────────────────────────────────────────
-    story.append(_section_title("Epicrisis:", styles))
+    story.append(_section_title("Epicriză:", styles))
     story.append(Paragraph(data["epicrisis"], styles["body"]))
     story.append(Spacer(1, 3 * mm))
 
     # ── RECOMMENDATIONS ───────────────────────────────────────────────────────
-    story.append(_section_title("Recommendations:", styles))
+    story.append(_section_title("Recomandări:", styles))
 
     for i, rec in enumerate(data["recommendations"], 1):
         block = []
@@ -677,13 +689,13 @@ def build_pdf(data: dict, output_path: str):
     # ── SIGNATURES ────────────────────────────────────────────────────────────
     sig_table = Table(
         [[
-            Paragraph(f"Attending Physician: <b>{data['attending']}</b>",
+            Paragraph(f"Medic Curant: <b>{data['attending']}</b>",
                       ParagraphStyle("sig", fontName="Helvetica", fontSize=8.5,
                                      textColor=C_DARK_GREY)),
-            Paragraph("Signature: ________________",
+            Paragraph("Semnătură: ________________",
                       ParagraphStyle("sig2", fontName="Helvetica", fontSize=8.5,
                                      textColor=C_DARK_GREY, alignment=TA_CENTER)),
-            Paragraph("Stamp",
+            Paragraph("Parafă",
                       ParagraphStyle("sig3", fontName="Helvetica", fontSize=8.5,
                                      textColor=C_LIGHT_GREY, alignment=TA_RIGHT)),
         ]],
@@ -705,7 +717,7 @@ def build_pdf(data: dict, output_path: str):
     # ── FOOTER ────────────────────────────────────────────────────────────────
     story.append(_hr(color=C_LIGHT_GREY, thickness=0.4, space_before=2, space_after=3))
     story.append(Paragraph(
-        f"Generated: {data['print_date']}  |  Patient MRN: {data['mrn']}  |  Page 1 of 1",
+        f"Generat la: {data['print_date']}  |  CNP / ID Pacient: {data['mrn']}  |  Pagina 1 din 1",
         styles["footer"]
     ))
 
@@ -727,34 +739,63 @@ def build_pdf(data: dict, output_path: str):
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python fhir_discharge_pdf.py <input_fhir.json> [output.pdf]")
+        print("Usage: python fhir_to_pdf.py <input_path> [output_path]")
         sys.exit(1)
 
-    input_path = sys.argv[1]
-    if not os.path.isfile(input_path):
-        print(f"Error: file not found: {input_path}")
-        sys.exit(1)
+    input_arg = sys.argv[1]
 
-    with open(input_path, encoding="utf-8") as f:
-        bundle = json.load(f)
-
-    if bundle.get("resourceType") != "Bundle":
-        print("Warning: input does not appear to be a FHIR Bundle — attempting anyway.")
-
-    print(f"Parsing FHIR bundle: {input_path}")
-    data = parse_fhir(bundle)
-
-    if len(sys.argv) >= 3:
-        output_path = sys.argv[2]
+    # Identify all files to process
+    if os.path.isdir(input_arg):
+        # Process all .json files in the directory
+        json_files = [os.path.join(input_arg, f) for f in os.listdir(input_arg) if f.endswith(".json")]
+        if not json_files:
+            print(f"No .json files found in directory: {input_arg}")
+            sys.exit(0)
     else:
-        safe_name = data["patient_name"].replace(" ", "_").lower()
-        output_path = os.path.join(
-            os.path.dirname(os.path.abspath(input_path)),
-            f"{safe_name}_discharge_summary.pdf"
-        )
+        # Process a single file
+        json_files = [input_arg]
 
-    print(f"Generating PDF → {output_path}")
-    build_pdf(data, output_path)
+    for input_path in json_files:
+        if not os.path.exists(input_path):
+            print(f"Error: file not found: {input_path}")
+            continue
+
+        try:
+            with open(input_path, encoding="utf-8") as f:
+                bundle = json.load(f)
+        except Exception as e:
+            print(f"Error reading {input_path}: {e}")
+            continue
+
+        if bundle.get("resourceType") != "Bundle":
+            print(f"Warning: {input_path} does not appear to be a FHIR Bundle — attempting anyway.")
+
+        print(f"Parsing FHIR bundle: {input_path}")
+        try:
+            data = parse_fhir(bundle)
+        except Exception as e:
+            print(f"Error parsing {input_path}: {e}")
+            continue
+
+        # Determine output path
+        # If processing a directory, we ignore sys.argv[2] (if any) and save in the same dir
+        # If processing a single file, we use sys.argv[2] if provided
+        if len(sys.argv) >= 3 and not os.path.isdir(input_arg):
+            output_path = sys.argv[2]
+        else:
+            safe_name = data["patient_name"].replace(" ", "_").lower()
+            output_path = os.path.join(
+                os.path.dirname(os.path.abspath(input_path)),
+                f"{safe_name}_bilet_iesire.pdf"
+            )
+
+        print(f"Generating PDF → {output_path}")
+        try:
+            build_pdf(data, output_path)
+        except Exception as e:
+            print(f"Error generating PDF for {input_path}: {e}")
+            continue
+
     print("Done.")
 
 
