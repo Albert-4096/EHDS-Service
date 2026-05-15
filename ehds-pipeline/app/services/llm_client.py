@@ -40,12 +40,20 @@ class LLMClient:
             self._provider = "none"
             self.client = None
 
-    async def extract_structured_data(self, text: str, schema: Type[T], system_prompt: str) -> T:
+    async def extract_structured_data(
+        self,
+        text: str,
+        schema: Type[T],
+        system_prompt: str,
+        max_tokens: int | None = None,
+    ) -> T:
         if not text.strip():
             return schema.model_construct()
 
         if self.client is None:
             raise LLMParseError("No LLM API key configured (ANTHROPIC_API_KEY or OPENROUTER_API_KEY).")
+
+        tokens = max_tokens or self.max_tokens
 
         try:
             logger.debug(
@@ -54,7 +62,7 @@ class LLMClient:
             if self._provider == "anthropic":
                 response = await self.client.messages.create(
                     model=self.model,
-                    max_tokens=self.max_tokens,
+                    max_tokens=tokens,
                     system=system_prompt,
                     messages=[{"role": "user", "content": text}],
                     response_model=schema,
@@ -67,7 +75,7 @@ class LLMClient:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": text},
                     ],
-                    max_tokens=self.max_tokens,
+                    max_tokens=tokens,
                 )
             logger.info("Successfully extracted structured data from LLM.")
             return response

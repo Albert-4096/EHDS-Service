@@ -10,14 +10,8 @@ from app.pipeline.stage1_extract import extract_text
 from app.pipeline.stage1b_checkboxes import extract_checkboxes
 from app.pipeline.stage2_classify import classify_document, DocumentType
 from app.pipeline.stage3_zones import split_zones
-from app.pipeline.stage4a_structured import extract_structured
-from app.pipeline.stage4b_labs import extract_labs
+from app.pipeline.stage4_llm import extract_all
 from app.pipeline.stage4c_checkboxgroups import map_checkboxes
-from app.pipeline.stage4d_appointment import extract_appointment
-from app.pipeline.stage4e_epicriza import extract_epicriza
-from app.pipeline.stage4f_medications import extract_medications
-from app.pipeline.stage4g_oncology import extract_oncology
-from app.pipeline.stage4h_transfusions import extract_transfusions
 from app.pipeline.stage5_merge import merge_and_validate
 from app.pipeline.stage6_fhir import build_fhir_resources
 from app.pipeline.stage7_bundle import assemble_bundle
@@ -68,34 +62,15 @@ async def process_file_pipeline(file: UploadFile) -> tuple:
         logger.debug("Stage 3: Splitting zones")
         zones = split_zones(text, doc_type)
 
-        logger.debug("Stage 4a: Extracting structured data")
-        structured = extract_structured(zones, doc_type, pdf_path=tmp_path)
+        logger.debug("Stage 4: LLM extraction (structured data, labs, epicriza, medications, oncology)")
+        structured, labs, appointment, epicriza, medications, oncology, transfusions = (
+            await extract_all(text, doc_type)
+        )
 
-        logger.debug("Stage 4b: Extracting labs")
-        labs = extract_labs(zones.get("Investigatii efectuate", ""))
-
-        logger.debug("Stage 4c: Mapping checkboxes")
+        logger.debug("Stage 4c: Mapping AcroForm checkboxes")
         admin_checkboxes = map_checkboxes(raw_checkboxes)
 
-        logger.debug("Stage 4d: Extracting appointments")
-        appointment = extract_appointment(zones.get("APPOINTMENT_BLOCK", ""))
-
         epicriza_zone = zones.get("Epicriza", "") or zones.get("EPICRIZĂ", "")
-
-        logger.debug("Stage 4e: Querying LLM for Epicriza")
-        epicriza = await extract_epicriza(epicriza_zone, doc_type)
-
-        logger.debug("Stage 4f: Extracting medications")
-        medications = extract_medications(zones.get("Tratament", ""))
-
-        logger.debug("Stage 4g: Extracting oncology fields")
-        oncology = extract_oncology(zones, epicriza)
-
-        logger.debug("Stage 4h: Extracting transfusions")
-        transfusions = extract_transfusions(
-            zones.get("DATE PACIENT / HEADER", ""),
-            doc_type,
-        )
 
         logger.debug("Stage 5: Merging and validating record")
         merged_record = merge_and_validate(
