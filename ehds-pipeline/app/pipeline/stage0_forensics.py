@@ -19,6 +19,7 @@ def detect_file_type(file_path: Path) -> DocumentForensics:
     
     if ext == ".pdf":
         file_type = "pdf"
+        pages_text_cache = []
         # 1. Use pdfplumber to check text density and page count
         with pdfplumber.open(file_path) as pdf:
             page_count = len(pdf.pages)
@@ -26,10 +27,11 @@ def detect_file_type(file_path: Path) -> DocumentForensics:
                 text = page.extract_text()
                 if text:
                     total_characters += len(text)
-                    
+                    pages_text_cache.append(text)
+
         estimated_text_density = total_characters / page_count if page_count > 0 else 0.0
         is_scanned = estimated_text_density < 100
-        
+
         # 2. Use pymupdf to check for AcroForm widgets
         with fitz.open(file_path) as doc:
             for page in doc:
@@ -50,10 +52,15 @@ def detect_file_type(file_path: Path) -> DocumentForensics:
         # Density doesn't strictly matter for docx, but we'll set it high to show not scanned
         estimated_text_density = 1000.0
         
-    return DocumentForensics(
+    forensics = DocumentForensics(
         is_scanned=is_scanned,
         page_count=page_count,
         has_acroform_widgets=has_acroform_widgets,
         estimated_text_density=estimated_text_density,
-        file_type=file_type
+        file_type=file_type,
     )
+    # Cache extracted page texts for digital PDFs so stage1 can skip a re-read.
+    # Scanned PDFs have no usable pdfplumber text, so the cache stays empty.
+    if file_type == "pdf" and not is_scanned:
+        forensics.cached_pages_text = pages_text_cache
+    return forensics

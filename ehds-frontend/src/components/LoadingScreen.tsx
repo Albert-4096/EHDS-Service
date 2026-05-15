@@ -18,25 +18,7 @@ const STAGES = [
   { id: 'validate', label: 'Validate & Sign',   desc: 'Conformance check · provenance hash',  ms: 3000 },
 ];
 
-const STAGE_TARGETS = [
-  { res: 0,  codes: 0,  refs: 0  },
-  { res: 4,  codes: 5,  refs: 2  },
-  { res: 10, codes: 10, refs: 7  },
-  { res: 16, codes: 13, refs: 11 },
-  { res: 20, codes: 15, refs: 14 },
-  { res: 24, codes: 17, refs: 17 },
-  { res: 24, codes: 17, refs: 18 },
-];
-
-const TIDBITS = [
-  'FHIR encodes care as small resources — Patient, Encounter, Observation, Condition, Procedure — tied together by a Bundle.',
-  'Every coded value links to a code system: ICD-10 for diagnoses, LOINC for labs, RxNorm for medications, SNOMED CT for the rest.',
-  'US Core 6.1.0 tightens FHIR for the US healthcare context, defining the must-support fields each resource needs.',
-  'A bundle ships with a signed manifest — validation must pass before it\'s accepted by downstream systems.',
-  'A typical discharge document maps to 20–30 FHIR resources across 6–8 distinct types.',
-];
-
-// ── Spinning globe with real country outlines ─────────────────────
+// ── Spinning globe with real country outlines + ocean stipple ─────
 function Globe({ size = 360 }: { size?: number }) {
   const [land, setLand] = useState<any>(null);
   const landRef = useRef<SVGPathElement>(null);
@@ -44,7 +26,7 @@ function Globe({ size = 360 }: { size?: number }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('https://unpkg.com/world-atlas@2.0.2/countries-110m.json')
+    fetch('/countries-110m.json')
       .then(r => r.json())
       .then((world: any) => {
         if (cancelled) return;
@@ -59,7 +41,7 @@ function Globe({ size = 360 }: { size?: number }) {
     const c = size / 2;
     const projection = geoOrthographic().scale(size * 0.36).translate([c, c]).clipAngle(90);
     const pathGen = geoPath(projection);
-    const graticule = geoGraticule().step([20, 20])();
+    const graticule = geoGraticule().step([15, 15])();
     let raf: number;
     let last = performance.now();
     let lon = 0;
@@ -77,20 +59,44 @@ function Globe({ size = 360 }: { size?: number }) {
 
   const c = size / 2;
   const r = size * 0.36;
+
   return (
     <g>
       <defs>
-        <radialGradient id="ldTerm" cx="38%" cy="36%" r="68%">
-          <stop offset="0%"   stopColor="#FFFFFF" stopOpacity="0.22" />
-          <stop offset="55%"  stopColor="#FFFFFF" stopOpacity="0" />
-          <stop offset="100%" stopColor="#000000" stopOpacity="0.22" />
+        {/* Ocean stipple dot pattern */}
+        <pattern id="ldOceanDot" x="0" y="0" width="5" height="5" patternUnits="userSpaceOnUse">
+          <circle cx="2.5" cy="2.5" r="0.55" fill={LD_INK} opacity="0.14" />
+        </pattern>
+        {/* Atmosphere glow */}
+        <radialGradient id="ldAtmo" cx="50%" cy="50%" r="50%">
+          <stop offset="82%"  stopColor="transparent" />
+          <stop offset="100%" stopColor={LD_ACCENT}   stopOpacity="0.18" />
         </radialGradient>
-        <clipPath id="ldSphereClip"><circle cx={c} cy={c} r={r} /></clipPath>
+        {/* Terminator (light/shadow gradient) */}
+        <radialGradient id="ldTerm" cx="34%" cy="30%" r="70%">
+          <stop offset="0%"   stopColor="#FFFFFF" stopOpacity="0.18" />
+          <stop offset="50%"  stopColor="#FFFFFF" stopOpacity="0" />
+          <stop offset="100%" stopColor={LD_INK}  stopOpacity="0.28" />
+        </radialGradient>
+        <clipPath id="ldSphereClip">
+          <circle cx={c} cy={c} r={r - 0.5} />
+        </clipPath>
       </defs>
-      <circle cx={c} cy={c} r={r} fill={LD_FACE} stroke={LD_INK} strokeWidth="1" />
-      <path ref={gratRef} fill="none" stroke={LD_INK} strokeWidth="0.4" opacity={0.18} />
-      <path ref={landRef} fill={LD_INK} stroke="none" />
+
+      {/* Ocean base */}
+      <circle cx={c} cy={c} r={r} fill={LD_FACE} />
+      {/* Ocean stipple texture */}
+      <circle cx={c} cy={c} r={r} fill="url(#ldOceanDot)" clipPath="url(#ldSphereClip)" />
+      {/* Graticule (lat/lon grid) */}
+      <path ref={gratRef} fill="none" stroke={LD_INK} strokeWidth="0.35" opacity={0.22} clipPath="url(#ldSphereClip)" />
+      {/* Land masses */}
+      <path ref={landRef} fill={LD_INK} fillOpacity={0.82} stroke={LD_FACE} strokeWidth="0.3" clipPath="url(#ldSphereClip)" />
+      {/* Terminator gradient (gives 3-D shading) */}
       <circle cx={c} cy={c} r={r} fill="url(#ldTerm)" clipPath="url(#ldSphereClip)" style={{ pointerEvents: 'none' }} />
+      {/* Atmosphere glow ring */}
+      <circle cx={c} cy={c} r={r + 3} fill="url(#ldAtmo)" style={{ pointerEvents: 'none' }} />
+      {/* Globe outline */}
+      <circle cx={c} cy={c} r={r} fill="none" stroke={LD_INK} strokeWidth="0.8" opacity={0.4} />
     </g>
   );
 }
@@ -139,38 +145,14 @@ function Whirl({ size = 360 }: { size?: number }) {
   );
 }
 
-// ── Smooth tweening counter ───────────────────────────────────────
-function LDCount({ target }: { target: number }) {
-  const [v, setV] = useState(0);
-  const fromRef = useRef(0);
-  useEffect(() => {
-    const from = fromRef.current;
-    const start = performance.now();
-    const ms = 800;
-    let raf: number;
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / ms);
-      const e = 1 - Math.pow(1 - t, 3);
-      setV(Math.round(from + (target - from) * e));
-      if (t < 1) raf = requestAnimationFrame(tick);
-      else fromRef.current = target;
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target]);
-  return <>{v}</>;
-}
-
 // ── Main LoadingScreen ────────────────────────────────────────────
 interface LoadingScreenProps {
   fileName?: string;
 }
 
 export function LoadingScreen({ fileName }: LoadingScreenProps) {
-  const [active, setActive]     = useState(0);
-  const [done, setDone]         = useState<number[]>([]);
-  const [counters, setCounters] = useState(STAGE_TARGETS[0]);
-  const [tidbitIdx, setTidbitIdx] = useState(0);
+  const [active, setActive] = useState(0);
+  const [done, setDone]     = useState<number[]>([]);
 
   useEffect(() => {
     let cancel = false;
@@ -178,7 +160,6 @@ export function LoadingScreen({ fileName }: LoadingScreenProps) {
     const tick = () => {
       if (cancel || i >= STAGES.length) return;
       setActive(i);
-      setCounters(STAGE_TARGETS[i]);
       const ms = Math.min(STAGES[i].ms, 1300);
       setTimeout(() => {
         if (cancel) return;
@@ -191,15 +172,11 @@ export function LoadingScreen({ fileName }: LoadingScreenProps) {
     return () => { cancel = true; };
   }, []);
 
-  useEffect(() => {
-    const t = setInterval(() => setTidbitIdx(i => (i + 1) % TIDBITS.length), 4000);
-    return () => clearInterval(t);
-  }, []);
-
   const progress = done.length / STAGES.length;
   const ARC_R = 230;
   const ARC_C = 2 * Math.PI * ARC_R;
 
+  // 16 data motes drifting inward toward the globe
   const motes = useMemo(() => Array.from({ length: 16 }, (_, i) => {
     const angle = (i / 16) * 360 + (Math.random() * 16 - 8);
     const dist  = 200 + Math.random() * 110;
@@ -214,6 +191,10 @@ export function LoadingScreen({ fileName }: LoadingScreenProps) {
 
   const displayName = fileName ?? 'discharge-summary.pdf';
   const eta = Math.max(1, Math.round(6 - progress * 6));
+  // Pipeline half-width: ~200px content + 60px right edge margin
+  const PIPE_RESERVE = 260;
+  // Globe SVG render size (displayed pixels)
+  const GLOBE_PX = 360;
 
   return (
     <div style={{
@@ -224,8 +205,8 @@ export function LoadingScreen({ fileName }: LoadingScreenProps) {
       {/* Breathing glow */}
       <div aria-hidden style={{
         position: 'absolute', top: '50%', left: '50%',
-        width: 760, height: 760, transform: 'translate(-50%, -50%)',
-        background: 'radial-gradient(circle, rgba(58,123,213,.08) 0%, transparent 60%)',
+        width: 680, height: 680, transform: 'translate(-50%, -50%)',
+        background: 'radial-gradient(circle, rgba(58,123,213,.07) 0%, transparent 60%)',
         animation: 'ld-breath 5.5s ease-in-out infinite',
         pointerEvents: 'none',
       }} />
@@ -239,27 +220,33 @@ export function LoadingScreen({ fileName }: LoadingScreenProps) {
       {/* File info — top-left */}
       <div style={{ position: 'absolute', top: 28, left: 36, zIndex: 5 }}>
         <div style={{ fontSize: 11, letterSpacing: 1.8, color: LD_MUTED, textTransform: 'uppercase', fontWeight: 600 }}>Processing</div>
-        <div style={{ marginTop: 6, fontFamily: '"IBM Plex Mono", monospace', fontSize: 12.5, color: LD_INK }}>{displayName}</div>
-        <div style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, color: LD_MUTED, marginTop: 2 }}>EHDS Pipeline · stage {Math.min(active + 1, STAGES.length)} of {STAGES.length}</div>
+        <div style={{ marginTop: 5, fontFamily: '"IBM Plex Mono", monospace', fontSize: 12.5, color: LD_INK }}>{displayName}</div>
+        <div style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, color: LD_MUTED, marginTop: 2 }}>
+          EHDS Pipeline · stage {Math.min(active + 1, STAGES.length)} of {STAGES.length}
+        </div>
       </div>
 
       {/* Progress % — top-right */}
       <div style={{ position: 'absolute', top: 28, right: 36, textAlign: 'right', zIndex: 5 }}>
         <div style={{ fontSize: 11, letterSpacing: 1.8, color: LD_MUTED, textTransform: 'uppercase', fontWeight: 600 }}>Progress</div>
-        <div style={{ marginTop: 4, fontFamily: '"IBM Plex Mono", monospace', fontSize: 22, fontWeight: 500, color: LD_INK, letterSpacing: -0.4 }}>{Math.round(progress * 100)}%</div>
+        <div style={{ marginTop: 4, fontFamily: '"IBM Plex Mono", monospace', fontSize: 22, fontWeight: 500, color: LD_INK, letterSpacing: -0.4 }}>
+          {Math.round(progress * 100)}%
+        </div>
         <div style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, color: LD_MUTED, marginTop: 2 }}>~{eta}s remaining</div>
       </div>
 
-      {/* Center column: globe → caption → counters */}
+      {/* Center area: globe + stage caption, offset left to leave room for pipeline */}
       <div style={{
         position: 'absolute', inset: 0,
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
-        gap: 28, padding: '108px 260px 88px 60px',
+        gap: 28,
+        paddingTop: 80, paddingBottom: 40,
+        paddingLeft: 40, paddingRight: PIPE_RESERVE,
         pointerEvents: 'none',
       }}>
-        {/* Globe stage */}
-        <div style={{ position: 'relative', width: 460, height: 460, flexShrink: 0 }}>
+        {/* Globe + motes + whirl + progress arc */}
+        <div style={{ position: 'relative', width: GLOBE_PX, height: GLOBE_PX, flexShrink: 0 }}>
           {motes.map((m, i) => (
             <div key={i} className="ld-mote" style={{
               position: 'absolute', top: '50%', left: '50%',
@@ -273,10 +260,16 @@ export function LoadingScreen({ fileName }: LoadingScreenProps) {
             } as React.CSSProperties} />
           ))}
 
-          <svg width="460" height="460" viewBox="0 0 500 500" style={{ position: 'relative', zIndex: 1, display: 'block' }}>
+          <svg
+            width={GLOBE_PX} height={GLOBE_PX}
+            viewBox="0 0 500 500"
+            style={{ position: 'relative', zIndex: 1, display: 'block' }}
+          >
             {/* Embracing progress arc */}
             <circle cx="250" cy="250" r={ARC_R} fill="none" stroke={LD_INK} strokeWidth="0.5" opacity="0.1" />
-            <circle cx="250" cy="250" r={ARC_R} fill="none" stroke={LD_ACCENT} strokeWidth="1.6"
+            <circle
+              cx="250" cy="250" r={ARC_R}
+              fill="none" stroke={LD_ACCENT} strokeWidth="1.6"
               strokeLinecap="round"
               strokeDasharray={ARC_C}
               strokeDashoffset={ARC_C * (1 - progress)}
@@ -291,12 +284,12 @@ export function LoadingScreen({ fileName }: LoadingScreenProps) {
         </div>
 
         {/* Stage caption */}
-        <div style={{ textAlign: 'center', minHeight: 76 }}>
+        <div style={{ textAlign: 'center', minHeight: 72 }}>
           <div key={active} style={{ animation: 'ld-fade-in .6s ease both' }}>
             <div style={{ fontSize: 11, letterSpacing: 2, color: LD_MUTED, textTransform: 'uppercase', fontWeight: 600 }}>
               Stage {Math.min(active + 1, STAGES.length)} of {STAGES.length}
             </div>
-            <div style={{ marginTop: 8, fontSize: 22, fontWeight: 500, color: LD_INK, letterSpacing: -0.5 }}>
+            <div style={{ marginTop: 8, fontSize: 21, fontWeight: 500, color: LD_INK, letterSpacing: -0.5 }}>
               {STAGES[Math.min(active, STAGES.length - 1)].label}
             </div>
             <div style={{ marginTop: 4, fontSize: 13, color: LD_MUTED, fontFamily: '"IBM Plex Mono", monospace' }}>
@@ -304,33 +297,21 @@ export function LoadingScreen({ fileName }: LoadingScreenProps) {
             </div>
           </div>
         </div>
-
-        {/* Live counters */}
-        <div style={{ display: 'flex', gap: 72 }}>
-          {([
-            { k: 'Resources mapped', v: counters.res  },
-            { k: 'Codes resolved',   v: counters.codes },
-            { k: 'References built', v: counters.refs  },
-          ] as const).map(c => (
-            <div key={c.k} style={{ textAlign: 'center', minWidth: 110 }}>
-              <div style={{ fontSize: 28, fontWeight: 500, color: LD_INK, fontFamily: '"IBM Plex Mono", monospace', letterSpacing: -0.5, fontFeatureSettings: '"tnum"' }}>
-                <LDCount target={c.v} />
-              </div>
-              <div style={{ marginTop: 2, fontSize: 11, color: LD_MUTED, letterSpacing: 1.4, textTransform: 'uppercase', fontWeight: 600 }}>{c.k}</div>
-            </div>
-          ))}
-        </div>
       </div>
 
-      {/* Pipeline — absolute right */}
-      <div style={{ position: 'absolute', top: '50%', right: 60, transform: 'translateY(-50%)', zIndex: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* Pipeline — absolute right, vertically centered */}
+      <div style={{
+        position: 'absolute', top: '50%', right: 48,
+        transform: 'translateY(-50%)',
+        zIndex: 4, display: 'flex', flexDirection: 'column', gap: 2,
+      }}>
         {STAGES.map((s, i) => {
           const isDone   = done.includes(i);
           const isActive = active === i && !isDone;
           return (
             <div key={s.id} style={{
-              display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0',
-              opacity: isDone || isActive ? 1 : 0.4, transition: 'opacity .35s',
+              display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0',
+              opacity: isDone || isActive ? 1 : 0.38, transition: 'opacity .35s',
             }}>
               <div style={{
                 width: 18, height: 18, borderRadius: 9, flexShrink: 0,
@@ -349,20 +330,13 @@ export function LoadingScreen({ fileName }: LoadingScreenProps) {
                   <div style={{ width: 6, height: 6, borderRadius: 3, background: LD_INK, animation: 'ld-pulse 1.1s ease-in-out infinite' }} />
                 )}
               </div>
-              <div style={{ minWidth: 134 }}>
+              <div style={{ minWidth: 144 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 500, color: LD_INK }}>{s.label}</div>
                 <div style={{ fontSize: 10.5, color: LD_MUTED, marginTop: 1, fontFamily: '"IBM Plex Mono", monospace' }}>{s.desc}</div>
               </div>
             </div>
           );
         })}
-      </div>
-
-      {/* Rotating tidbit */}
-      <div style={{ position: 'absolute', bottom: 22, left: 0, right: 0, textAlign: 'center', padding: '0 60px' }}>
-        <div key={tidbitIdx} style={{ fontSize: 12, color: LD_MUTED, fontStyle: 'italic', maxWidth: 720, margin: '0 auto', lineHeight: 1.5, animation: 'ld-fade-in 1s ease both' }}>
-          {TIDBITS[tidbitIdx]}
-        </div>
       </div>
     </div>
   );

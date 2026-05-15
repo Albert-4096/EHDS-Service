@@ -31,7 +31,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - LLM_MODEL=${LLM_MODEL:-google/gemma-4-26b-a4b-it}
+      - LLM_MODEL=${LLM_MODEL:-qwen/qwen3-6b-flash}
       - HAPI_FHIR_BASE_URL=http://hapi-fhir:8080/fhir
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ehds_db
     volumes:

@@ -1,3 +1,4 @@
+import asyncio
 import tempfile
 import traceback
 import hashlib
@@ -66,16 +67,16 @@ async def process_file_pipeline(file: UploadFile, content: bytes) -> tuple:
             tmp_path = Path(tmp.name)
 
         logger.debug(f"Stage 0: Analyzing forensics for {tmp_path}")
-        forensics = detect_file_type(tmp_path)
+        forensics = await asyncio.to_thread(detect_file_type, tmp_path)
         logger.debug(
             f"Forensics: scanned={forensics.is_scanned}, acroform={forensics.has_acroform_widgets}"
         )
 
         logger.debug("Stage 1: Extracting text")
-        text = extract_text(tmp_path, forensics)
+        text = await asyncio.to_thread(extract_text, tmp_path, forensics)
 
         logger.debug("Stage 1b: Extracting checkboxes")
-        raw_checkboxes = extract_checkboxes(tmp_path, text, forensics)
+        raw_checkboxes = await asyncio.to_thread(extract_checkboxes, tmp_path, text, forensics)
 
         logger.debug("Stage 4: LLM extraction (classify + all clinical fields)")
         doc_type, structured, labs, appointment, epicriza, medications, oncology, transfusions = (

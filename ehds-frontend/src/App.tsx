@@ -84,7 +84,7 @@ function App() {
     try {
       const response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 120000,
+        timeout: 300000,
       });
       setBundleData(response.data);
       setAppState('result');

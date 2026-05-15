@@ -1,5 +1,6 @@
 import pdfplumber
 import pytesseract
+from concurrent.futures import ThreadPoolExecutor
 from pdf2image import convert_from_path
 from pathlib import Path
 from PIL import Image
@@ -21,22 +22,32 @@ def extract_text(file_path: Path, forensics: DocumentForensics) -> str:
 
     if forensics.file_type == "pdf":
         if not forensics.is_scanned:
-            # Digital PDF extraction
-            logger.debug(f"Extracting text directly from digital PDF: {file_path}")
-            with pdfplumber.open(file_path) as pdf:
-                for page in pdf.pages:
-                    text = page.extract_text()
-                    if text:
-                        pages_text.append(text)
+            # Use text already extracted during stage0 forensics if available.
+            if forensics.cached_pages_text:
+                logger.debug(f"Using cached text from stage0 for digital PDF: {file_path}")
+                pages_text = list(forensics.cached_pages_text)
+            else:
+                logger.debug(f"Extracting text directly from digital PDF: {file_path}")
+                with pdfplumber.open(file_path) as pdf:
+                    for page in pdf.pages:
+                        text = page.extract_text()
+                        if text:
+                            pages_text.append(text)
         else:
-            # Scanned PDF extraction (OCR)
-            logger.info(f"PDF is scanned. Running OCR with lang={settings.pdf_ocr_lang} on {file_path}")
+            # Scanned PDF: render all pages then OCR in parallel (Tesseract releases the GIL).
+            logger.info(f"PDF is scanned. Running parallel OCR with lang={settings.pdf_ocr_lang} on {file_path}")
             images = convert_from_path(file_path, dpi=300)
-            for i, img in enumerate(images):
-                logger.debug(f"Running OCR on page {i+1}/{len(images)}")
-                text = pytesseract.image_to_string(img, lang=settings.pdf_ocr_lang)
-                if text:
-                    pages_text.append(text)
+            lang = settings.pdf_ocr_lang
+
+            def _ocr_page(args):
+                idx, img = args
+                logger.debug(f"Running OCR on page {idx + 1}/{len(images)}")
+                return pytesseract.image_to_string(img, lang=lang)
+
+            with ThreadPoolExecutor() as executor:
+                results = list(executor.map(_ocr_page, enumerate(images)))
+
+            pages_text = [t for t in results if t]
                     
     elif forensics.file_type == "docx":
         logger.debug(f"Extracting text from DOCX: {file_path}")

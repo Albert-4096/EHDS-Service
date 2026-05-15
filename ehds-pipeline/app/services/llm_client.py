@@ -9,13 +9,12 @@ from app.utils.logger import get_logger
 logger = get_logger()
 T = TypeVar("T", bound=BaseModel)
 
-# Ordered fallback list for OpenRouter free tier.
-# Primary model is settings.llm_model; on 429/404 we walk down this list.
+# Fallback models for OpenRouter. Primary model is settings.llm_model;
+# on 429/404 we walk down this list.
 OPENROUTER_FALLBACKS = [
-    "deepseek/deepseek-v4-flash:free",
-    "google/gemma-4-31b-it:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
-    "google/gemma-4-26b-a4b-it:free",
+    "qwen/qwen3-8b",
+    "google/gemma-3-27b-it",
+    "mistralai/mistral-small-3.1-24b-instruct",
 ]
 
 
@@ -97,6 +96,8 @@ class LLMClient:
                         {"role": "user", "content": text},
                     ],
                     max_tokens=tokens,
+                    max_retries=1,
+                    extra_body={"thinking": {"type": "disabled"}},
                 )
                 logger.info(f"Successfully extracted structured data via {model}.")
                 return response

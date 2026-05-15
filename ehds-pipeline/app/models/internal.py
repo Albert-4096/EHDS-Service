@@ -167,3 +167,4 @@ class DocumentForensics(BaseModel):
     has_acroform_widgets: bool
     estimated_text_density: float
     file_type: str = "pdf"  # To track the detected file type
+    cached_pages_text: list[str] = Field(default_factory=list)

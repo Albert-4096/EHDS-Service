@@ -566,7 +566,6 @@ async def extract_all(
         text=full_text,
         schema=ClinicalDocumentExtraction,
         system_prompt=SYSTEM_PROMPT,
-        max_tokens=8192,
     )
 
     doc_type = (
