@@ -122,13 +122,30 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
                 extension=[_data_absent_reason()],
             )
         ]
-        if record.structured.nume:
-            patient.name = [HumanName(text=record.structured.nume)]
+
+    if record.structured.nume:
+        patient.name = [HumanName(text=record.structured.nume)]
 
     if record.structured.dob_from_cnp:
         patient.birthDate = record.structured.dob_from_cnp
-    elif not cnp_present and not nume_present:
-        patient.extension = [_data_absent_reason()]
+    elif record.structured.dob_explicit:
+        patient.birthDate = record.structured.dob_explicit
+
+    patient_extensions = []
+    if not cnp_present and not nume_present:
+        patient_extensions.append(_data_absent_reason())
+    if record.structured.grup_sangvin:
+        blood_val = record.structured.grup_sangvin
+        if record.structured.rh:
+            blood_val += f" {record.structured.rh}"
+        patient_extensions.append(
+            Extension(
+                url="http://hl7.org/fhir/StructureDefinition/patient-bloodGroup",
+                valueString=blood_val,
+            )
+        )
+    if patient_extensions:
+        patient.extension = patient_extensions
 
     sex = record.structured.sex_from_cnp or record.structured.sex_explicit
     if sex:
