@@ -9,6 +9,15 @@ from app.utils.logger import get_logger
 logger = get_logger()
 T = TypeVar("T", bound=BaseModel)
 
+# Ordered fallback list for OpenRouter free tier.
+# Primary model is settings.llm_model; on 429 we walk down this list.
+OPENROUTER_FALLBACKS = [
+    "deepseek/deepseek-chat-v3-0324:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemini-2.0-flash-exp:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
+]
+
 
 class LLMParseError(Exception):
     """Raised when the LLM fails to extract data conforming to the schema."""
@@ -39,6 +48,11 @@ class LLMClient:
             self._provider = "none"
             self.client = None
 
+    def _models_to_try(self) -> list[str]:
+        """Primary model first, then fallbacks (deduped, primary removed from list)."""
+        others = [m for m in OPENROUTER_FALLBACKS if m != self.model]
+        return [self.model] + others
+
     async def extract_structured_data(
         self,
         text: str,
@@ -54,11 +68,9 @@ class LLMClient:
 
         tokens = max_tokens or self.max_tokens
 
-        try:
-            logger.debug(
-                f"Querying LLM ({self._provider}, {self.model}) with text length: {len(text)}"
-            )
-            if self._provider == "anthropic":
+        if self._provider == "anthropic":
+            try:
+                logger.debug(f"Querying Anthropic ({self.model}), text length: {len(text)}")
                 response = await self.client.messages.create(
                     model=self.model,
                     max_tokens=tokens,
@@ -66,9 +78,19 @@ class LLMClient:
                     messages=[{"role": "user", "content": text}],
                     response_model=schema,
                 )
-            else:
+                logger.info("Successfully extracted structured data from LLM.")
+                return response
+            except Exception as e:
+                logger.error(f"LLM Extraction failed: {str(e)}")
+                raise LLMParseError(f"Failed to extract structured data: {str(e)}")
+
+        # OpenRouter: try primary model then fallbacks on 429
+        last_exc: Exception | None = None
+        for model in self._models_to_try():
+            try:
+                logger.debug(f"Querying OpenRouter ({model}), text length: {len(text)}")
                 response = await self.client.chat.completions.create(
-                    model=self.model,
+                    model=model,
                     response_model=schema,
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -76,11 +98,21 @@ class LLMClient:
                     ],
                     max_tokens=tokens,
                 )
-            logger.info("Successfully extracted structured data from LLM.")
-            return response
-        except Exception as e:
-            logger.error(f"LLM Extraction failed: {str(e)}")
-            raise LLMParseError(f"Failed to extract structured data: {str(e)}")
+                logger.info(f"Successfully extracted structured data via {model}.")
+                return response
+            except Exception as e:
+                err = str(e)
+                if "429" in err or "rate" in err.lower():
+                    logger.warning(f"{model} rate-limited, trying next fallback.")
+                    last_exc = e
+                    continue
+                # Non-429 error: don't bother trying other models
+                logger.error(f"LLM Extraction failed on {model}: {err}")
+                raise LLMParseError(f"Failed to extract structured data: {err}")
+
+        raise LLMParseError(
+            f"All OpenRouter models rate-limited. Last error: {last_exc}"
+        )
 
 
 llm_client = LLMClient()

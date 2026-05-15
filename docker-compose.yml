@@ -31,7 +31,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - LLM_MODEL=${LLM_MODEL:-meta-llama/llama-3.3-70b-instruct:free}
+      - LLM_MODEL=${LLM_MODEL:-deepseek/deepseek-chat-v3-0324:free}
       - HAPI_FHIR_BASE_URL=http://hapi-fhir:8080/fhir
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ehds_db
     volumes:

@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     openrouter_api_key: str = ""
     anthropic_api_key: str = ""
-    llm_model: str = "meta-llama/llama-3.3-70b-instruct:free"
+    llm_model: str = "deepseek/deepseek-chat-v3-0324:free"
     llm_max_tokens: int = 3000
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ehds_db"
     hapi_fhir_base_url: str = "http://localhost:8080/fhir"
