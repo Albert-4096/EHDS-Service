@@ -6,6 +6,7 @@ from fhir.resources.adverseevent import AdverseEvent
 from fhir.resources.appointment import Appointment
 from fhir.resources.careplan import CarePlan, CarePlanActivity
 from fhir.resources.codeableconcept import CodeableConcept
+from fhir.resources.codeablereference import CodeableReference
 from fhir.resources.coding import Coding
 from fhir.resources.condition import Condition
 from fhir.resources.device import Device, DeviceName
@@ -411,7 +412,7 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
             id=generate_uuid(),
             status="recorded",
             subject=patient_ref,
-            medication=concept,
+            medication=CodeableReference(concept=concept),
         )
         mstmt.encounter = encounter_ref
         dosage_text = f"{med.doza or ''} {med.frecventa or ''} {med.durata or ''}".strip()
