@@ -410,7 +410,7 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
             concept.coding = [_coding("http://www.whocc.no/atc", med.atc_code)]
         mstmt = MedicationStatement(
             id=generate_uuid(),
-            status="recorded",
+            status="unknown",
             subject=patient_ref,
             medication=CodeableReference(concept=concept),
         )
