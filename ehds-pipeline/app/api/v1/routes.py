@@ -2,6 +2,7 @@ import asyncio
 import tempfile
 import traceback
 import hashlib
+import time
 import magic
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
@@ -66,26 +67,31 @@ async def process_file_pipeline(file: UploadFile, content: bytes) -> tuple:
             tmp.write(content)
             tmp_path = Path(tmp.name)
 
+        pipeline_start = time.perf_counter()
+
         logger.debug(f"Stage 0: Analyzing forensics for {tmp_path}")
+        t = time.perf_counter()
         forensics = await asyncio.to_thread(detect_file_type, tmp_path)
-        logger.debug(
-            f"Forensics: scanned={forensics.is_scanned}, acroform={forensics.has_acroform_widgets}"
-        )
+        logger.info(f"Stage 0 (forensics): {time.perf_counter() - t:.2f}s | scanned={forensics.is_scanned}, acroform={forensics.has_acroform_widgets}")
 
         logger.debug("Stage 1: Extracting text")
+        t = time.perf_counter()
         text = await asyncio.to_thread(extract_text, tmp_path, forensics)
+        logger.info(f"Stage 1 (text extraction): {time.perf_counter() - t:.2f}s | {len(text)} chars")
 
         logger.debug("Stage 1b: Extracting checkboxes")
+        t = time.perf_counter()
         raw_checkboxes = await asyncio.to_thread(extract_checkboxes, tmp_path, text, forensics)
+        logger.info(f"Stage 1b (checkboxes): {time.perf_counter() - t:.2f}s | {len(raw_checkboxes)} found")
 
         logger.debug("Stage 4: LLM extraction (classify + all clinical fields)")
+        t = time.perf_counter()
         doc_type, structured, labs, appointment, epicriza, medications, oncology, transfusions = (
             await extract_all(text)
         )
-
-        # Priority 1: pseudonymized references — no PHI in logs
         logger.info(
-            f"Stage 4 extracted — type: {doc_type.value}, "
+            f"Stage 4 (LLM extraction): {time.perf_counter() - t:.2f}s | "
+            f"type: {doc_type.value}, "
             f"patient_ref: {_pseudo(structured.nume)}, "
             f"cnp_ref: {_pseudo(structured.cnp)}, "
             f"has_diagnosis: {bool(structured.diagnostic_principal)}, "
@@ -94,9 +100,12 @@ async def process_file_pipeline(file: UploadFile, content: bytes) -> tuple:
         )
 
         logger.debug("Stage 4c: Mapping AcroForm checkboxes")
+        t = time.perf_counter()
         admin_checkboxes = map_checkboxes(raw_checkboxes)
+        logger.info(f"Stage 4c (checkbox mapping): {time.perf_counter() - t:.2f}s")
 
         logger.debug("Stage 5: Merging and validating record")
+        t = time.perf_counter()
         merged_record = merge_and_validate(
             doc_type=doc_type,
             structured=structured,
@@ -109,8 +118,9 @@ async def process_file_pipeline(file: UploadFile, content: bytes) -> tuple:
             transfusions=transfusions,
             epicriza_zone_text=text,
         )
+        logger.info(f"Stage 5 (merge+validate): {time.perf_counter() - t:.2f}s | confidence={merged_record.overall_confidence:.2f}")
 
-        logger.info(f"Pipeline processing complete. Confidence: {merged_record.overall_confidence:.2f}")
+        logger.info(f"Pipeline (stages 0-5) complete in {time.perf_counter() - pipeline_start:.2f}s")
         return merged_record, doc_type, file_hash
 
     except CoreSetError as e:
@@ -143,13 +153,20 @@ async def extract_primary(background_tasks: BackgroundTasks, file: UploadFile = 
 
     merged_record, doc_type, file_hash = await process_file_pipeline(file, content)
 
+    request_start = time.perf_counter()
+
     logger.debug("Stage 6: Building FHIR resources")
+    t = time.perf_counter()
     fhir_resources = build_fhir_resources(merged_record)
+    logger.info(f"Stage 6 (FHIR resources): {time.perf_counter() - t:.2f}s")
 
     logger.debug("Stage 7: Assembling FHIR Bundle")
+    t = time.perf_counter()
     medic_name = merged_record.structured.medic
     bundle = assemble_bundle(fhir_resources, doc_type, medic_name, file_hash)
+    logger.info(f"Stage 7 (bundle assembly): {time.perf_counter() - t:.2f}s")
 
+    logger.info(f"Stages 6-7 complete in {time.perf_counter() - request_start:.2f}s")
     logger.info(f"Scheduling background upload to FHIR server: {settings.hapi_fhir_base_url}")
     background_tasks.add_task(upload_to_fhir, bundle, settings.hapi_fhir_base_url)
 
@@ -173,16 +190,25 @@ async def extract_secondary(background_tasks: BackgroundTasks, file: UploadFile 
             logger.warning(f"Opt-out flag detected for cnp_ref: {_pseudo(merged_record.structured.cnp)}")
             raise HTTPException(status_code=403, detail="Patient opted out of secondary use.")
 
+    request_start = time.perf_counter()
+
     logger.info("Stage 8: Anonymizing record for Pillar 2 compliance")
+    t = time.perf_counter()
     anonymized_record = anonymize_record(merged_record)
+    logger.info(f"Stage 8 (anonymize): {time.perf_counter() - t:.2f}s")
 
     logger.debug("Stage 6: Building FHIR resources")
+    t = time.perf_counter()
     fhir_resources = build_fhir_resources(anonymized_record)
+    logger.info(f"Stage 6 (FHIR resources): {time.perf_counter() - t:.2f}s")
 
     logger.debug("Stage 7: Assembling FHIR Bundle")
+    t = time.perf_counter()
     medic_name = anonymized_record.structured.medic
     bundle = assemble_bundle(fhir_resources, doc_type, medic_name, file_hash)
+    logger.info(f"Stage 7 (bundle assembly): {time.perf_counter() - t:.2f}s")
 
+    logger.info(f"Stages 6-8 complete in {time.perf_counter() - request_start:.2f}s")
     logger.info(
         f"Scheduling background upload of anonymized bundle to FHIR server: {settings.hapi_fhir_base_url}"
     )
