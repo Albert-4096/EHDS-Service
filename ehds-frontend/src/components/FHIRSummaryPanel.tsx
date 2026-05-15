@@ -19,7 +19,8 @@ function getCode(cc: any, systemFragment: string): string | null {
 function patientName(p: any): string {
   if (!p?.name?.length) return '—';
   const n = p.name[0];
-  return [[...(n.given ?? [])].join(' '), n.family].filter(Boolean).join(' ') || '—';
+  const composed = [[...(n.given ?? [])].join(' '), n.family].filter(Boolean).join(' ');
+  return composed || n.text || '—';
 }
 
 function fmtDate(s?: string): string {
@@ -50,8 +51,14 @@ function calcAge(birthDate?: string): string {
   } catch { return ''; }
 }
 
+function encounterPeriod(enc: any): { start?: string; end?: string } {
+  // FHIR R5 uses actualPeriod; R4 uses period
+  const p = enc?.actualPeriod ?? enc?.period;
+  return { start: p?.start, end: p?.end };
+}
+
 function encounterDuration(enc: any): string {
-  const s = enc?.period?.start, e = enc?.period?.end;
+  const { start: s, end: e } = encounterPeriod(enc);
   if (!s || !e) return '—';
   const hrs = (new Date(e).getTime() - new Date(s).getTime()) / 3_600_000;
   if (hrs < 24) return `${Math.round(hrs)}h (day-hospital)`;
@@ -60,7 +67,9 @@ function encounterDuration(enc: any): string {
 }
 
 function encounterClass(enc: any): string {
-  return (enc?.class?.code || enc?.class?.coding?.[0]?.code || '').toUpperCase() || '—';
+  // FHIR R5: class is an array of CodeableConcepts
+  const cls = Array.isArray(enc?.class) ? enc.class[0] : enc?.class;
+  return (cls?.code || cls?.coding?.[0]?.code || '').toUpperCase() || '—';
 }
 
 // --- Sub-components ---
@@ -163,8 +172,8 @@ export function FHIRSummaryPanel({ bundle }: { bundle: any }) {
           accent="bg-violet-500/10 text-violet-300"
         >
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
-            <DL label="Admission"  value={fmtDateTime(encounter?.period?.start)} />
-            <DL label="Discharge"  value={fmtDateTime(encounter?.period?.end)} />
+            <DL label="Admission"  value={fmtDateTime(encounterPeriod(encounter).start)} />
+            <DL label="Discharge"  value={fmtDateTime(encounterPeriod(encounter).end)} />
             <div className="col-span-2">
               <DL label="Duration" value={encounterDuration(encounter)} />
             </div>

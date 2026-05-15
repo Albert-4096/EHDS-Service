@@ -88,7 +88,8 @@ class StructuredFields(BaseModel):
     nr_focg: Optional[str] = None
     contract_number: Optional[str] = None     # HP-08
     cnp: Optional[str] = None
-    dob_from_cnp: Optional[DateType] = None       # HP-13: derived
+    dob_from_cnp: Optional[DateType] = None       # HP-13: derived from CNP
+    dob_explicit: Optional[DateType] = None        # HP-13: from "Data nastere" text
     sex_from_cnp: Optional[str] = None
     varsta: Optional[int] = None
     sex_explicit: Optional[str] = None

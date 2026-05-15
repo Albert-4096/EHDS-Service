@@ -96,6 +96,8 @@ class ClinicalDocumentExtraction(BaseModel):
     # Patient demographics
     patient_name: Optional[str] = None
     cnp: Optional[str] = None
+    birth_date: Optional[str] = None   # from "Data nastere" field, exact as written
+    sex: Optional[str] = None          # "M" or "F" from document (Sex: M/F)
     age: Optional[int] = None
     blood_group: Optional[str] = None
     rh_factor: Optional[str] = None
@@ -171,6 +173,8 @@ CRITICAL RULES:
 5. NEVER generate medical codes (SNOMED CT, ICD-10/CIM-10, LOINC, ATC, UCUM). TEXT ONLY.
 6. Dates: extract exactly as written ("15.03.2023", "15 martie 2023", "2023-03-15").
 7. CNP: exactly 13 digits. Return null if not found or if the string is not 13 digits.
+   birth_date: extract from "Data nastere" field exactly as written (e.g. "15/03/1950"). Return null if absent.
+   sex: "M" for male, "F" for female, from the "Sex:" field. Return null if absent.
 8. Lab results: extract ALL individual test name/value/unit triplets from any lab section.
    Panel classification:
    - "cbc": hemoleucograma (WBC/Leucocite, RBC/Hematii, HGB/Hemoglobina, HCT, PLT, MCV, MCH, MCHC, neutrofile, limfocite, monocite, eozinofile, RDW, MPV...)
@@ -268,6 +272,13 @@ def _build_structured(ex: ClinicalDocumentExtraction, doc_type: DocumentType) ->
         except CNPParseError as e:
             warnings.append(str(e))
 
+    dob_explicit = None
+    if ex.birth_date:
+        try:
+            dob_explicit = parse_romanian_date(ex.birth_date)
+        except DateParseError:
+            pass
+
     admission_dt = _parse_dt(ex.admission_date)
     discharge_dt = _parse_dt(ex.discharge_date)
 
@@ -302,7 +313,9 @@ def _build_structured(ex: ClinicalDocumentExtraction, doc_type: DocumentType) ->
         contract_number=ex.contract_number,
         cnp=ex.cnp,
         dob_from_cnp=dob_from_cnp,
+        dob_explicit=dob_explicit,
         sex_from_cnp=sex_from_cnp,
+        sex_explicit=ex.sex,
         varsta=ex.age,
         grup_sangvin=ex.blood_group,
         rh=ex.rh_factor,
