@@ -8,8 +8,6 @@ from app.config import settings
 from app.pipeline.stage0_forensics import detect_file_type
 from app.pipeline.stage1_extract import extract_text
 from app.pipeline.stage1b_checkboxes import extract_checkboxes
-from app.pipeline.stage2_classify import classify_document, DocumentType
-from app.pipeline.stage3_zones import split_zones
 from app.pipeline.stage4_llm import extract_all
 from app.pipeline.stage4c_checkboxgroups import map_checkboxes
 from app.pipeline.stage5_merge import merge_and_validate
@@ -52,25 +50,25 @@ async def process_file_pipeline(file: UploadFile) -> tuple:
         logger.debug("Stage 1: Extracting text")
         text = extract_text(tmp_path, forensics)
 
-        logger.debug("Stage 2: Classifying document")
-        doc_type = classify_document(text)
-        logger.info(f"Classified document as: {doc_type.value}")
-
         logger.debug("Stage 1b: Extracting checkboxes")
         raw_checkboxes = extract_checkboxes(tmp_path, text, forensics)
 
-        logger.debug("Stage 3: Splitting zones")
-        zones = split_zones(text, doc_type)
-
-        logger.debug("Stage 4: LLM extraction (structured data, labs, epicriza, medications, oncology)")
-        structured, labs, appointment, epicriza, medications, oncology, transfusions = (
-            await extract_all(text, doc_type)
+        logger.debug("Stage 4: LLM extraction (classify + all clinical fields)")
+        doc_type, structured, labs, appointment, epicriza, medications, oncology, transfusions = (
+            await extract_all(text)
         )
 
+        logger.info(
+            f"Stage 4 extracted — type: {doc_type.value}, patient: '{structured.nume}', "
+            f"cnp: '{structured.cnp}', diagnosis: '{structured.diagnostic_principal}', "
+            f"labs: {sum(len(d) for d in [labs.cbc, labs.biochemistry, labs.hormones, labs.other])} values, "
+            f"meds: {len(medications)}, "
+            f"epicriza_fields: motive={bool(epicriza.motive_internare)}, "
+            f"narrative={bool(epicriza.current_treatment_narrative)}, "
+            f"history={bool(epicriza.antecedente_personale)}"
+        )
         logger.debug("Stage 4c: Mapping AcroForm checkboxes")
         admin_checkboxes = map_checkboxes(raw_checkboxes)
-
-        epicriza_zone = zones.get("Epicriza", "") or zones.get("EPICRIZĂ", "")
 
         logger.debug("Stage 5: Merging and validating record")
         merged_record = merge_and_validate(
@@ -83,7 +81,7 @@ async def process_file_pipeline(file: UploadFile) -> tuple:
             medications=medications,
             oncology=oncology,
             transfusions=transfusions,
-            epicriza_zone_text=epicriza_zone,
+            epicriza_zone_text=text,
         )
 
         logger.info(f"Pipeline processing complete. Confidence: {merged_record.overall_confidence:.2f}")

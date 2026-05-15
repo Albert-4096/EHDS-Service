@@ -10,12 +10,12 @@ logger = get_logger()
 T = TypeVar("T", bound=BaseModel)
 
 # Ordered fallback list for OpenRouter free tier.
-# Primary model is settings.llm_model; on 429 we walk down this list.
+# Primary model is settings.llm_model; on 429/404 we walk down this list.
 OPENROUTER_FALLBACKS = [
-    "deepseek/deepseek-chat-v3-0324:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "google/gemini-2.0-flash-exp:free",
-    "mistralai/mistral-small-3.1-24b-instruct:free",
+    "deepseek/deepseek-v4-flash:free",
+    "google/gemma-4-31b-it:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "google/gemma-4-26b-a4b-it:free",
 ]
 
 
@@ -102,8 +102,8 @@ class LLMClient:
                 return response
             except Exception as e:
                 err = str(e)
-                if "429" in err or "rate" in err.lower():
-                    logger.warning(f"{model} rate-limited, trying next fallback.")
+                if "429" in err or "404" in err or "rate" in err.lower() or "no endpoints" in err.lower():
+                    logger.warning(f"{model} unavailable ({err[:80]}), trying next fallback.")
                     last_exc = e
                     continue
                 # Non-429 error: don't bother trying other models

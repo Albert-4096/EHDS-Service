@@ -36,6 +36,9 @@ def _epicriza_present(epicriza: EpicrizaExtracted | None, epicriza_zone_text: st
         or epicriza.procedures
         or epicriza.history_timeline
         or epicriza.imaging_results
+        or epicriza.antecedente_personale
+        or epicriza.administered_in_hospital
+        or epicriza.antecedente_heredocolaterale
     )
 
 

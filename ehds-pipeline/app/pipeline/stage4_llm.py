@@ -88,6 +88,11 @@ class TransfusionLLM(BaseModel):
 
 
 class ClinicalDocumentExtraction(BaseModel):
+    # Document type — derived from document content, not a separate classifier
+    # "DOC_HDR" = Bilet de Externare (Hospital Discharge Report)
+    # "DOC_BIS" = Bilet de Iesire / Scrisoare Medicala (Outpatient Letter)
+    document_type: str = "DOC_HDR"
+
     # Patient demographics
     patient_name: Optional[str] = None
     cnp: Optional[str] = None
@@ -161,22 +166,24 @@ CRITICAL RULES:
 1. Return ONLY valid JSON matching the schema. No markdown, no explanation, no preamble.
 2. Return null for any field absent from the document. NEVER fabricate or infer values.
 3. Preserve EXACT Romanian text for all string fields. Do not translate.
-4. NEVER generate medical codes (SNOMED CT, ICD-10/CIM-10, LOINC, ATC, UCUM). TEXT ONLY.
-5. Dates: extract exactly as written ("15.03.2023", "15 martie 2023", "2023-03-15").
-6. CNP: exactly 13 digits. Return null if not found or if the string is not 13 digits.
-7. Lab results: extract ALL individual test name/value/unit triplets from any lab section.
+4. Set document_type: "DOC_HDR" for Bilet de Externare (hospital discharge), "DOC_BIS" for
+   Bilet de Ieșire or Scrisoare Medicală (outpatient letter). Default to "DOC_HDR" if unclear.
+5. NEVER generate medical codes (SNOMED CT, ICD-10/CIM-10, LOINC, ATC, UCUM). TEXT ONLY.
+6. Dates: extract exactly as written ("15.03.2023", "15 martie 2023", "2023-03-15").
+7. CNP: exactly 13 digits. Return null if not found or if the string is not 13 digits.
+8. Lab results: extract ALL individual test name/value/unit triplets from any lab section.
    Panel classification:
    - "cbc": hemoleucograma (WBC/Leucocite, RBC/Hematii, HGB/Hemoglobina, HCT, PLT, MCV, MCH, MCHC, neutrofile, limfocite, monocite, eozinofile, RDW, MPV...)
    - "hormones": TSH, FT4, cortizol, DHEA, FSH, LH, prolactina, estradiol, testosteron, progesteron
    - "biochemistry": all other quantitative lab values (creatinina, glicemie, bilirubina, transaminaze, sodiu, potasiu, calciu, fosfataza, etc.)
    - "other": anything unclear
    Set flagged=true if the value has an asterisk prefix or is explicitly marked outside reference range.
-8. Medications: one entry per drug from the discharge medication list or treatment section.
+9. Medications: one entry per drug from the discharge medication list or treatment section.
    raw = full original text line. dose_is_total=true if line contains " DT" after the dose.
-9. Separate CURRENT VISIT from HISTORY:
-   - chief_complaint, treatment_narrative, administered_in_hospital: THIS admission only.
-   - past_procedures, history_timeline, personal_medical_history: all prior events.
-10. Oncology: ECOG/IP/PS → ecog_score (integer 0–4). TNM → exact raw string ("pT2N1M0").
+10. Separate CURRENT VISIT from HISTORY:
+    - chief_complaint, treatment_narrative, administered_in_hospital: THIS admission only.
+    - past_procedures, history_timeline, personal_medical_history: all prior events.
+11. Oncology: ECOG/IP/PS → ecog_score (integer 0–4). TNM → exact raw string ("pT2N1M0").
     "Ciclul: N" → oncology_cycle (integer).
 11. Blood group: "A", "B", "AB", or "O" only. Rh factor: "pozitiv" | "negativ" | "+" | "-".
 12. discharge_status: exact Romanian term (vindecat / ameliorat / staționar / agravat / decedat).
@@ -525,8 +532,8 @@ def _build_transfusions(ex: ClinicalDocumentExtraction) -> list[TransfusionRecor
 
 async def extract_all(
     full_text: str,
-    doc_type: DocumentType,
 ) -> tuple[
+    DocumentType,
     StructuredFields,
     LabResults,
     Optional[AppointmentBlock],
@@ -537,7 +544,8 @@ async def extract_all(
 ]:
     """
     Single LLM pass over the full document text.
-    Returns all data previously split across stages 4a, 4b, 4d, 4e, 4f, 4g, 4h.
+    Classifies the document type AND extracts all clinical fields in one call,
+    replacing stages 2, 4a, 4b, 4d, 4e, 4f, 4g, and 4h.
     The LLM extracts clinical TEXT only; terminology codes are resolved deterministically
     from local maps (LOINC, ATC) and any CIM-10 codes embedded in the source text.
     """
@@ -548,7 +556,14 @@ async def extract_all(
         max_tokens=8192,
     )
 
+    doc_type = (
+        DocumentType.OUTPATIENT_MEDICAL_LETTER
+        if extraction.document_type == "DOC_BIS"
+        else DocumentType.HOSPITAL_DISCHARGE_REPORT
+    )
+
     return (
+        doc_type,
         _build_structured(extraction, doc_type),
         _build_labs(extraction),
         _build_appointment(extraction),
