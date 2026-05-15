@@ -19,7 +19,8 @@ function getCode(cc: any, systemFragment: string): string | null {
 function patientName(p: any): string {
   if (!p?.name?.length) return '—';
   const n = p.name[0];
-  return [[...(n.given ?? [])].join(' '), n.family].filter(Boolean).join(' ') || '—';
+  const composed = [[...(n.given ?? [])].join(' '), n.family].filter(Boolean).join(' ');
+  return composed || n.text || '—';
 }
 
 function fmtDate(s?: string): string {
