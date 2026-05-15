@@ -32,7 +32,7 @@ async def upload_to_fhir(bundle: Bundle, base_url: str) -> dict:
             if resource is None:
                 continue
 
-            resource_type = resource.resource_type  # e.g. "Patient", "Encounter"
+            resource_type = resource.get_resource_type()
             resource_id = resource.id
 
             if not resource_id:
