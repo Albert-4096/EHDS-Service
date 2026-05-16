@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EHDS Platform — HackTM 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+  /* ── Reset & Base ─────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #F5F7FA;
+    --surface:  #FFFFFF;
+    --navy:     #0F2A4A;
+    --navy2:    #1E4D8A;
+    --accent:   #3A7BD5;
+    --accent-bright: #5B9BFF;
+    --border:   #E5E9F0;
+    --text:     #1A2433;
+    --muted:    #5B6878;
+    --ok:       #0E8559;
+    --warn:     #C03A2B;
+    --slide-bg: #0A1E36;
+  }
+
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--slide-bg);
+    color: #fff;
+  }
+
+  /* ── Deck ─────────────────────────────────────────────────────── */
+  #deck {
+    position: fixed; inset: 0;
+    display: flex; align-items: stretch; justify-content: stretch;
+  }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 60px 80px;
+    opacity: 0;
+    transform: translateY(32px);
+    transition: opacity .45s ease, transform .45s ease;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .slide.active {
+    opacity: 1; transform: translateY(0);
+    pointer-events: auto;
+    transition: opacity .45s ease .05s, transform .45s ease .05s;
+  }
+  .slide.exit {
+    opacity: 0; transform: translateY(-32px);
+    transition: opacity .3s ease, transform .3s ease;
+  }
+
+  /* ── Navigation ───────────────────────────────────────────────── */
+  #nav {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 16px; z-index: 100;
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255,255,255,.25);
+    cursor: pointer; transition: background .25s, transform .25s;
+  }
+  .dot.active { background: var(--accent); transform: scale(1.4); }
+
+  #btn-prev, #btn-next {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
+    color: rgba(255,255,255,.7); font-size: 22px;
+    width: 48px; height: 48px; border-radius: 50%;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    z-index: 100; transition: background .2s, color .2s;
+  }
+  #btn-prev:hover, #btn-next:hover { background: rgba(255,255,255,.15); color: #fff; }
+  #btn-prev { left: 24px; }
+  #btn-next { right: 24px; }
+
+  #slide-counter {
+    position: fixed; top: 24px; right: 32px;
+    font-size: 13px; color: rgba(255,255,255,.35);
+    letter-spacing: .05em; z-index: 100;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Brand mark ───────────────────────────────────────────────── */
+  .brand {
+    position: fixed; top: 24px; left: 32px; z-index: 100;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+  }
+  .brand-name {
+    font-size: 14px; font-weight: 700; letter-spacing: .08em;
+    color: rgba(255,255,255,.6);
+    text-transform: uppercase;
+  }
+  .brand-name span { color: var(--accent-bright); }
+
+  /* ── Typography helpers ───────────────────────────────────────── */
+  .eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: .2em;
+    text-transform: uppercase; color: var(--accent-bright);
+    margin-bottom: 20px;
+  }
+  .mega {
+    font-size: clamp(72px, 10vw, 130px);
+    font-weight: 900; line-height: 1;
+    letter-spacing: -.03em;
+  }
+  .huge {
+    font-size: clamp(48px, 6.5vw, 88px);
+    font-weight: 900; line-height: 1.05;
+    letter-spacing: -.025em;
+  }
+  .h1 {
+    font-size: clamp(36px, 4.5vw, 64px);
+    font-weight: 800; line-height: 1.1;
+    letter-spacing: -.02em;
+  }
+  .h2 {
+    font-size: clamp(24px, 3vw, 40px);
+    font-weight: 700; line-height: 1.2;
+  }
+  .body-lg {
+    font-size: clamp(16px, 1.8vw, 22px);
+    font-weight: 400; line-height: 1.55;
+    color: rgba(255,255,255,.75);
+  }
+  .body-sm {
+    font-size: clamp(13px, 1.4vw, 17px);
+    font-weight: 400; line-height: 1.55;
+    color: rgba(255,255,255,.6);
+  }
+  .accent-txt  { color: var(--accent-bright); }
+  .ok-txt      { color: #2ECC8D; }
+  .warn-txt    { color: #FF6B6B; }
+  .muted-txt   { color: rgba(255,255,255,.45); }
+  .mono        { font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Cards & Surfaces ─────────────────────────────────────────── */
+  .card {
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 16px;
+    padding: 28px 32px;
+    backdrop-filter: blur(8px);
+  }
+  .card-accent {
+    background: rgba(58,123,213,.12);
+    border: 1px solid rgba(58,123,213,.35);
+    border-radius: 16px;
+    padding: 28px 32px;
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(58,123,213,.18); border: 1px solid rgba(91,155,255,.35);
+    border-radius: 100px; padding: 6px 16px;
+    font-size: 13px; font-weight: 600; color: var(--accent-bright);
+    letter-spacing: .04em;
+  }
+  .pill.ok { background: rgba(14,133,89,.2); border-color: rgba(46,204,141,.35); color: #2ECC8D; }
+  .pill.warn { background: rgba(192,58,43,.2); border-color: rgba(255,107,107,.35); color: #FF6B6B; }
+
+  /* ── Divider ─────────────────────────────────────────────────── */
+  .divider {
+    width: 48px; height: 3px; border-radius: 2px;
+    background: var(--accent); margin: 20px auto;
+  }
+  .divider.left { margin: 20px 0; }
+
+  /* ── Slide backgrounds ────────────────────────────────────────── */
+  .slide-dark {
+    background: radial-gradient(ellipse at 60% 40%, rgba(30,77,138,.35) 0%, transparent 65%),
+                radial-gradient(ellipse at 20% 80%, rgba(58,123,213,.15) 0%, transparent 50%),
+                var(--slide-bg);
+  }
+  .slide-darker {
+    background: radial-gradient(ellipse at 50% 50%, rgba(15,42,74,.8) 0%, #060E1A 100%);
+  }
+  .slide-video-bg {
+    background: radial-gradient(ellipse at 50% 30%, rgba(14,133,89,.2) 0%, transparent 60%),
+                var(--slide-bg);
+  }
+
+  /* ── Grid dots bg ─────────────────────────────────────────────── */
+  .slide::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+  }
+
+  /* ── Glow line ────────────────────────────────────────────────── */
+  .glow-line {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, var(--accent) 40%, var(--accent-bright) 60%, transparent 100%);
+    opacity: .6;
+  }
+
+  /* ─────────────────────────────────────────────────────────────── */
+  /*  SLIDE 1 – HOOK + PROBLEM                                       */
+  /* ─────────────────────────────────────────────────────────────── */
+  #s1 { align-items: flex-start; }
+
+  .s1-tag {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(255,107,107,.12); border: 1px solid rgba(255,107,107,.3);
+    border-radius: 6px; padding: 6px 14px; margin-bottom: 36px;
+    font-size: 13px; font-weight: 600; color: #FF8A80; letter-spacing: .05em;
+  }
+  .s1-tag::before {
+    content: '●'; font-size: 8px; color: #FF6B6B;
+    animation: blink 1.4s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+  .s1-headline { max-width: 820px; }
+  .s1-headline .line1 { display: block; }
+  .s1-headline .line2 {
+    display: block; color: var(--accent-bright);
+  }
+
+  .s1-stats {
+    display: flex; gap: 40px; margin-top: 52px; flex-wrap: wrap;
+  }
+  .stat-block { display: flex; flex-direction: column; gap: 6px; }
+  .stat-num {
+    font-size: clamp(40px, 5vw, 68px); font-weight: 900;
+    line-height: 1; letter-spacing: -.03em;
+  }
+  .stat-label {
+    font-size: 13px; font-weight: 500; color: rgba(255,255,255,.5);
+    letter-spacing: .04em; text-transform: uppercase;
+  }
+  .stat-sep {
+    width: 1px; background: rgba(255,255,255,.12);
+    align-self: stretch; margin: 8px 0;
+  }
+
+  /* ─────────────────────────────────────────────────────────────── */
+  /*  SLIDE 2 – SOLUTION                                             */
+  /* ─────────────────────────────────────────────────────────────── */
+  #s2 { gap: 0; align-items: center; text-align: center; }
+
+  .pipeline-flow {
+    display: flex; align-items: center; gap: 0;
+    margin-top: 40px; flex-wrap: nowrap;
+    max-width: 900px;
+  }
+  .pf-node {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    flex: 1; min-width: 80px;
+  }
+  .pf-box {
+    background: rgba(58,123,213,.15); border: 1px solid rgba(58,123,213,.35);
+    border-radius: 10px; padding: 10px 8px; width: 100%;
+    text-align: center; font-size: 11px; font-weight: 600;
+    color: var(--accent-bright); letter-spacing: .04em;
+    line-height: 1.3;
+  }
+  .pf-box.source {
+    background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.2);
+    color: rgba(255,255,255,.8);
+  }
+  .pf-box.output {
+    background: rgba(14,133,89,.15); border-color: rgba(46,204,141,.35);
+    color: #2ECC8D;
+  }
+  .pf-stage {
+    font-size: 9px; color: rgba(255,255,255,.3);
+    letter-spacing: .05em; text-transform: uppercase;
+  }
+  .pf-arrow {
+    color: rgba(255,255,255,.25); font-size: 16px; padding: 0 4px;
+    flex-shrink: 0; margin-bottom: 20px;
+  }
+
+  .codebadges {
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+    margin-top: 28px;
+  }
+  .cbadge {
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 6px; padding: 5px 12px;
+    font-size: 12px; font-weight: 600; font-family: 'JetBrains Mono', monospace;
+    color: rgba(255,255,255,.65); letter-spacing: .04em;
+  }
+
+  .doc-types {
+    display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; justify-content: center;
+  }
+  .doc-chip {
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+    border-radius: 8px; padding: 8px 16px;
+    font-size: 12px; color: rgba(255,255,255,.55);
+    display: flex; flex-direction: column; gap: 2px; text-align: center;
+  }
+  .doc-chip strong { color: rgba(255,255,255,.85); font-size: 13px; }
+
+  /* ─────────────────────────────────────────────────────────────── */
+  /*  SLIDE 3 – DEMO VIDEO                                           */
+  /* ─────────────────────────────────────────────────────────────── */
+  #s3 { gap: 24px; }
+
+  .video-wrapper {
+    width: 100%; max-width: 860px;
+    aspect-ratio: 16/9;
+    border-radius: 16px; overflow: hidden;
+    border: 2px solid rgba(46,204,141,.4);
+    box-shadow: 0 0 60px rgba(14,133,89,.25), 0 0 120px rgba(14,133,89,.1);
+    position: relative; background: #060E1A;
+  }
+  .video-wrapper video {
+    width: 100%; height: 100%; object-fit: cover;
+    display: block;
+  }
+  .video-placeholder {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; background: #060E1A;
+  }
+  .video-placeholder .play-icon {
+    width: 72px; height: 72px; border-radius: 50%;
+    background: rgba(14,133,89,.25); border: 2px solid rgba(46,204,141,.5);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; color: #2ECC8D;
+  }
+  .video-placeholder p {
+    font-size: 14px; color: rgba(255,255,255,.4);
+    text-align: center; max-width: 320px; line-height: 1.5;
+  }
+
+  .video-cues {
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: 860px;
+  }
+  .vcue {
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+    border-radius: 6px; padding: 5px 12px; font-size: 11px; font-weight: 500;
+    color: rgba(255,255,255,.5); display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .vcue-time {
+    font-size: 10px; color: var(--accent-bright); font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+  }
+
+  /* ─────────────────────────────────────────────────────────────── */
+  /*  SLIDE 4 – WHY AI                                               */
+  /* ─────────────────────────────────────────────────────────────── */
+  #s4 { align-items: flex-start; }
+
+  .quote-block {
+    background: rgba(255,255,255,.04); border-left: 3px solid var(--accent);
+    border-radius: 0 12px 12px 0; padding: 24px 28px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(14px, 1.7vw, 20px); color: rgba(255,255,255,.85);
+    line-height: 1.6; max-width: 700px; margin: 28px 0;
+    font-style: italic;
+  }
+  .quote-block em { color: var(--accent-bright); font-style: normal; }
+
+  .ai-pills { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
+  .ai-pill {
+    background: rgba(58,123,213,.12); border: 1px solid rgba(58,123,213,.3);
+    border-radius: 8px; padding: 10px 18px;
+    font-size: clamp(13px, 1.4vw, 16px); font-weight: 600;
+    color: var(--accent-bright);
+  }
+  .ai-pill.green {
+    background: rgba(14,133,89,.12); border-color: rgba(46,204,141,.3);
+    color: #2ECC8D;
+  }
+  .ai-pill.red {
+    background: rgba(192,58,43,.12); border-color: rgba(255,107,107,.3);
+    color: #FF8A80;
+  }
+
+  /* ─────────────────────────────────────────────────────────────── */
+  /*  SLIDE 5 – MARKET                                               */
+  /* ─────────────────────────────────────────────────────────────── */
+  #s5 { flex-direction: row; gap: 60px; align-items: center; }
+
+  .market-left { flex: 1; max-width: 400px; }
+  .market-right { flex: 1; display: flex; flex-direction: column; gap: 16px; }
+
+  .market-row {
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09);
+    border-radius: 12px; padding: 18px 22px;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  }
+  .market-row .mrow-label {
+    font-size: 13px; color: rgba(255,255,255,.5); font-weight: 500;
+  }
+  .market-row .mrow-val {
+    font-size: clamp(20px, 2.5vw, 30px); font-weight: 800;
+    letter-spacing: -.02em; white-space: nowrap;
+  }
+  .market-row.highlight {
+    background: rgba(58,123,213,.12); border-color: rgba(58,123,213,.35);
+  }
+  .market-row.highlight .mrow-val { color: var(--accent-bright); }
+
+  .moat-block {
+    margin-top: 28px;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09);
+    border-radius: 12px; padding: 18px 22px;
+  }
+  .moat-block h4 {
+    font-size: 12px; font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: rgba(255,255,255,.4); margin-bottom: 10px;
+  }
+  .moat-block p { font-size: 14px; color: rgba(255,255,255,.65); line-height: 1.5; }
+  .moat-block strong { color: var(--accent-bright); }
+
+  /* ─────────────────────────────────────────────────────────────── */
+  /*  SLIDE 6 – CLOSE                                                */
+  /* ─────────────────────────────────────────────────────────────── */
+  #s6 { text-align: center; gap: 0; }
+
+  .close-tagline {
+    font-size: clamp(28px, 3.5vw, 48px); font-weight: 800;
+    line-height: 1.25; letter-spacing: -.02em;
+    max-width: 700px; margin: 0 auto;
+  }
+  .close-tagline .accent-txt { display: block; }
+
+  .roadmap-row {
+    display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
+    margin-top: 40px;
+  }
+  .rmap-item {
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+    border-radius: 10px; padding: 14px 20px; text-align: left;
+    display: flex; align-items: flex-start; gap: 10px; max-width: 220px;
+  }
+  .rmap-num {
+    font-size: 11px; font-weight: 700; color: var(--accent-bright);
+    font-family: 'JetBrains Mono', monospace; min-width: 20px;
+    padding-top: 2px;
+  }
+  .rmap-text {
+    font-size: 13px; color: rgba(255,255,255,.7); line-height: 1.45; font-weight: 500;
+  }
+
+  .final-line {
+    margin-top: 48px; font-size: 13px; color: rgba(255,255,255,.3);
+    letter-spacing: .08em; text-transform: uppercase;
+  }
+  .final-line span { color: rgba(255,255,255,.15); margin: 0 12px; }
+
+  /* ── Animations on active slide ───────────────────────────────── */
+  .slide.active .anim-in {
+    animation: fadeUp .55s ease forwards;
+  }
+  .slide.active .anim-in:nth-child(1) { animation-delay: .05s; }
+  .slide.active .anim-in:nth-child(2) { animation-delay: .15s; }
+  .slide.active .anim-in:nth-child(3) { animation-delay: .25s; }
+  .slide.active .anim-in:nth-child(4) { animation-delay: .35s; }
+  .slide.active .anim-in:nth-child(5) { animation-delay: .45s; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Transformation layout (Slide 4) ─────────────────────────── */
+  #s4 { align-items: center; text-align: center; }
+  .xform-wrap {
+    display: flex; align-items: stretch; gap: 14px;
+    width: 100%; max-width: 940px; margin-top: 28px;
+  }
+  .code-block {
+    flex: 1; background: #060E1A; border-radius: 12px;
+    padding: 20px 22px; font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(11px, 1.2vw, 14px); line-height: 1.75;
+    border: 1px solid rgba(255,255,255,.1); text-align: left;
+  }
+  .code-block .cb-label {
+    font-size: 10px; font-weight: 700; letter-spacing: .15em;
+    text-transform: uppercase; margin-bottom: 14px; display: block;
+  }
+  .code-block.input-block { border-color: rgba(58,123,213,.3); }
+  .code-block.input-block .cb-label { color: var(--accent-bright); }
+  .code-block.output-block { border-color: rgba(46,204,141,.3); }
+  .code-block.output-block .cb-label { color: #2ECC8D; }
+  .xform-mid {
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 6px; color: rgba(255,255,255,.2); font-size: 22px;
+    flex-shrink: 0; margin-bottom: 28px;
+  }
+  .jk { color: #7DA8E0; }
+  .js { color: #C7E8B0; }
+  .jn { color: #F4B97A; }
+  .ji { color: #E895C8; }
+  .jc { color: rgba(255,255,255,.25); }
+
+  .s4-chips {
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+    margin-top: 20px;
+  }
+  .s4-chip {
+    border-radius: 6px; padding: 6px 14px;
+    font-size: 12px; font-weight: 600; font-family: 'JetBrains Mono', monospace;
+    letter-spacing: .02em;
+  }
+  .s4-chip.green { background: rgba(14,133,89,.15); border: 1px solid rgba(46,204,141,.3); color: #2ECC8D; }
+  .s4-chip.red   { background: rgba(192,58,43,.15);  border: 1px solid rgba(255,107,107,.3); color: #FF8A80; }
+  .s4-chip.blue  { background: rgba(58,123,213,.12); border: 1px solid rgba(91,155,255,.3);  color: var(--accent-bright); }
+
+  /* ── Example cards (Slide 5) ──────────────────────────────────── */
+  #s5 { flex-direction: column; align-items: center; gap: 0; }
+  .example-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 16px; width: 100%; max-width: 1020px; margin-top: 28px;
+  }
+  .example-card {
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09);
+    border-radius: 14px; padding: 20px 18px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .ex-title {
+    font-size: 12px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: rgba(255,255,255,.5);
+  }
+  .ex-input {
+    background: #060E1A; border-radius: 8px; padding: 11px 13px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(10px, 1.1vw, 13px); line-height: 1.6;
+    border: 1px solid rgba(58,123,213,.22); color: rgba(255,255,255,.8);
+    font-style: italic; white-space: pre-wrap;
+  }
+  .ex-arrow {
+    text-align: center; color: rgba(255,255,255,.18); font-size: 13px;
+    letter-spacing: .05em;
+  }
+  .ex-output { display: flex; flex-direction: column; gap: 6px; }
+  .ex-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; font-family: 'JetBrains Mono', monospace;
+    padding: 4px 10px; border-radius: 5px; align-self: flex-start;
+    background: rgba(46,204,141,.1); border: 1px solid rgba(46,204,141,.25);
+    color: #2ECC8D;
+  }
+  .ex-tag.blue {
+    background: rgba(58,123,213,.12); border-color: rgba(91,155,255,.3);
+    color: var(--accent-bright);
+  }
+  .ex-tag.yellow {
+    background: rgba(244,185,122,.1); border-color: rgba(244,185,122,.3);
+    color: #F4B97A;
+  }
+  .ex-tag.red {
+    background: rgba(192,58,43,.12); border-color: rgba(255,107,107,.3);
+    color: #FF8A80;
+  }
+
+  /* ── Key metrics row (Slide 2) ────────────────────────────────── */
+  .key-metrics {
+    display: flex; gap: 40px; justify-content: center; margin-top: 24px;
+  }
+  .km-block { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .km-num {
+    font-size: clamp(32px, 4vw, 52px); font-weight: 900;
+    letter-spacing: -.03em; color: var(--accent-bright);
+  }
+  .km-label {
+    font-size: 11px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: rgba(255,255,255,.4);
+  }
+
+  /* ── Responsive clamp ─────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .slide { padding: 48px 40px; }
+    .s1-stats { gap: 24px; }
+    .pipeline-flow { flex-wrap: wrap; justify-content: center; }
+    .example-grid { grid-template-columns: 1fr; }
+    .xform-wrap { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Brand mark always visible -->
+<div class="brand">
+  <div class="brand-dot"></div>
+  <div class="brand-name">EHDS <span>Platform</span></div>
+</div>
+
+<div id="slide-counter">1 / 6</div>
+
+<!-- Prev / Next buttons -->
+<button id="btn-prev" onclick="changeSlide(-1)" aria-label="Previous">&#8592;</button>
+<button id="btn-next" onclick="changeSlide(1)"  aria-label="Next">&#8594;</button>
+
+<!-- Dot nav -->
+<div id="nav">
+  <div class="dot active" onclick="goTo(0)"></div>
+  <div class="dot" onclick="goTo(1)"></div>
+  <div class="dot" onclick="goTo(2)"></div>
+  <div class="dot" onclick="goTo(3)"></div>
+  <div class="dot" onclick="goTo(4)"></div>
+  <div class="dot" onclick="goTo(5)"></div>
+</div>
+
+<div id="deck">
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 1 · HOOK + PROBLEM                                    -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <section id="s1" class="slide slide-dark active">
+    <div class="glow-line"></div>
+
+    <div class="s1-tag anim-in">REGULATION IN FORCE · MARCH 26, 2025</div>
+
+    <div class="s1-headline anim-in">
+      <span class="huge line1">Every private clinic in Europe</span>
+      <span class="huge line2">must be FHIR-ready by 2029.</span>
+    </div>
+
+    <div class="s1-stats anim-in">
+      <div class="stat-block">
+        <div class="stat-num warn-txt">€20M</div>
+        <div class="stat-label">Max penalty</div>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-block">
+        <div class="stat-num accent-txt">2029</div>
+        <div class="stat-label">Compliance deadline</div>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-block">
+        <div class="stat-num" style="color:#fff">42,000</div>
+        <div class="stat-label">Private medical units</div>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-block">
+        <div class="stat-num warn-txt">69%</div>
+        <div class="stat-label">Without compliant middleware</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 2 · SOLUTION                                          -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <section id="s2" class="slide slide-dark">
+    <div class="glow-line"></div>
+
+    <div class="eyebrow anim-in">THE SOLUTION</div>
+    <div class="h1 anim-in">EHDS Platform</div>
+
+    <div class="pipeline-flow anim-in">
+      <div class="pf-node">
+        <div class="pf-box source">PDF<br/>Scanned / Digital</div>
+        <div class="pf-stage">Input</div>
+      </div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-node">
+        <div class="pf-box">Forensics<br/>+ OCR</div>
+        <div class="pf-stage">S0–S1</div>
+      </div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-node">
+        <div class="pf-box">Classify<br/>+ Zone</div>
+        <div class="pf-stage">S2–S3</div>
+      </div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-node">
+        <div class="pf-box">Extract with<br/> local LLM</div>
+        <div class="pf-stage">S4A–S4G</div>
+      </div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-node">
+        <div class="pf-box">Validate<br/>Pydantic</div>
+        <div class="pf-stage">S5</div>
+      </div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-node">
+        <div class="pf-box">Assemble<br/>Bundle</div>
+        <div class="pf-stage">S6–S7</div>
+      </div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-node">
+        <div class="pf-box output">FHIR R4<br/>Bundle ✓</div>
+        <div class="pf-stage">Output</div>
+      </div>
+    </div>
+
+    <div class="key-metrics anim-in">
+      <div class="km-block">
+        <div class="km-num">9</div>
+        <div class="km-label">Pipeline stages</div>
+      </div>
+      <div class="stat-sep" style="background:rgba(255,255,255,.1);margin:8px 0;"></div>
+      <div class="km-block">
+        <div class="km-num">15</div>
+        <div class="km-label">FHIR resource types</div>
+      </div>
+      <div class="stat-sep" style="background:rgba(255,255,255,.1);margin:8px 0;"></div>
+      <div class="km-block">
+        <div class="km-num">&lt;15s</div>
+        <div class="km-label">Per document</div>
+      </div>
+    </div>
+
+    <div class="codebadges anim-in">
+      <span class="cbadge">SNOMED CT</span>
+      <span class="cbadge">LOINC</span>
+      <span class="cbadge">ATC</span>
+      <span class="cbadge">ICD-10 / CIM-10</span>
+      <span class="cbadge">UCUM</span>
+      <span class="cbadge">EEHRxF</span>
+      <span class="cbadge">SHA-256 Provenance</span>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 3 · DEMO VIDEO                                        -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!--
+    HOW TO ADD YOUR SCREEN RECORDING:
+    1. Export your screen recording as demo.mp4 (H.264, 1080p)
+    2. Place demo.mp4 in the same folder as this file
+    3. The <video> element below will auto-load it
+    4. Alternatively change the src attribute to any relative path
+    ─────────────────────────────────────────────────────────────
+    The placeholder div is hidden automatically once the video loads.
+  -->
+  <section id="s3" class="slide slide-video-bg">
+    <div class="glow-line" style="background:linear-gradient(90deg,transparent,#0E8559,#2ECC8D,transparent);"></div>
+
+    <div class="eyebrow anim-in" style="color:#2ECC8D;text-align:center;">LIVE DEMO</div>
+
+    <div class="video-wrapper anim-in">
+      <video id="demo-video" controls preload="metadata" poster=""
+             style="display:none"
+             onloadedmetadata="this.style.display='block';document.getElementById('vid-placeholder').style.display='none'">
+        <source src="demo.mp4" type="video/mp4" />
+      </video>
+      <div id="vid-placeholder" class="video-placeholder">
+        <div class="play-icon">▶</div>
+        <p>
+          Screen recording goes here.<br/>
+          Place <code style="color:#2ECC8D;font-family:monospace">demo.mp4</code>
+          next to this HTML file.
+        </p>
+      </div>
+    </div>
+
+    <div class="video-cues anim-in">
+      <div class="vcue"><span class="vcue-time">0–5s</span> Drop Romanian PDF into upload UI</div>
+      <div class="vcue"><span class="vcue-time">5–12s</span> Pipeline classifies → DOC_BIS</div>
+      <div class="vcue"><span class="vcue-time">12–22s</span> Claude separates current visit from history</div>
+      <div class="vcue"><span class="vcue-time">22–32s</span> FHIR Bundle: 15 resource types</div>
+      <div class="vcue"><span class="vcue-time">32–37s</span> SHA-256 Provenance resource</div>
+      <div class="vcue"><span class="vcue-time">37–40s</span> HAPI Validator ✓ green pass</div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 4 · WHY AI IS ESSENTIAL                               -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <section id="s4" class="slide slide-dark">
+    <div class="glow-line"></div>
+
+    <div class="eyebrow anim-in">WHY AI IS NON-NEGOTIABLE</div>
+    <div class="h1 anim-in">Romanian clinical text → structured FHIR.</div>
+
+    <div class="xform-wrap anim-in">
+      <div class="code-block input-block">
+        <span class="cb-label">Romanian clinical note (raw)</span>
+        <span style="color:rgba(255,255,255,.55);">"</span><span style="color:#C7E8B0;">alternativ cu </span><span style="color:#F4B97A;font-style:italic;">Encephabol</span><span style="color:#C7E8B0;">,</span><br/>
+        <span style="color:#C7E8B0;">&nbsp;10 zile pe lună,</span><br/>
+        <span style="color:#C7E8B0;">&nbsp;sub protecție de </span><span style="color:#E895C8;font-style:italic;">Fenobarbital</span><span style="color:rgba(255,255,255,.55);">"</span>
+      </div>
+
+      <div class="xform-mid">→</div>
+
+      <div class="code-block output-block">
+        <span class="cb-label">FHIR R4 output (Claude API + schema)</span>
+        <span class="jc">{</span><br/>
+        &nbsp;<span class="jk">"resourceType"</span><span class="jc">:</span> <span class="js">"MedicationRequest"</span><span class="jc">,</span><br/>
+        &nbsp;<span class="jk">"code"</span><span class="jc">:</span> <span class="jc">{</span> <span class="jk">"code"</span><span class="jc">:</span> <span class="js">"N06BX12"</span> <span class="jc">},</span> <span style="color:rgba(255,255,255,.25);">← ATC</span><br/>
+        &nbsp;<span class="jk">"timing"</span><span class="jc">:</span> <span class="jc">{</span> <span class="jk">"period"</span><span class="jc">:</span> <span class="jn">10</span><span class="jc">,</span> <span class="jk">"periodUnit"</span><span class="jc">:</span> <span class="js">"d"</span> <span class="jc">},</span><br/>
+        &nbsp;<span class="jk">"asNeededBoolean"</span><span class="jc">:</span> <span class="ji">false</span><br/>
+        <span class="jc">}</span>
+      </div>
+    </div>
+
+    <div class="s4-chips anim-in">
+      <span class="s4-chip red">Fails closed — no hallucination</span>
+      <span class="s4-chip green">Pydantic schema-enforced</span>
+      <span class="s4-chip blue">DataAbsentReason if absent</span>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 5 · COMPLEXITY EXAMPLES                               -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <section id="s5" class="slide slide-dark">
+    <div class="glow-line"></div>
+
+    <div class="eyebrow anim-in">WHAT THE PIPELINE ACTUALLY HANDLES</div>
+    <div class="h2 anim-in" style="max-width:700px;text-align:center;">
+      18 edge cases. Real documents. One pipeline.
+    </div>
+
+    <div class="example-grid anim-in">
+
+      <!-- Card 1: Complex medication regimen -->
+      <div class="example-card">
+        <div class="ex-title">Cyclical medication</div>
+        <div class="ex-input">"sub protecție de Fenobarbital,
+alternativ cu Encephabol,
+10 zile pe lună"</div>
+        <div class="ex-arrow">↓ Claude API · schema-enforced</div>
+        <div class="ex-output">
+          <span class="ex-tag">MedicationRequest</span>
+          <span class="ex-tag blue">ATC N06BX12</span>
+          <span class="ex-tag yellow">period: 10d/month</span>
+          <span class="ex-tag blue">boundsPeriod</span>
+        </div>
+      </div>
+
+      <!-- Card 2: TNM cancer staging -->
+      <div class="example-card">
+        <div class="ex-title">Cancer staging</div>
+        <div class="ex-input">"pT2n0(0+/3 GS)m0
+BRAF mutant st. IB op."</div>
+        <div class="ex-arrow">↓ Regex + SNOMED CT lookup</div>
+        <div class="ex-output">
+          <span class="ex-tag blue">Observation T → 385356007</span>
+          <span class="ex-tag blue">Observation N → 385382003</span>
+          <span class="ex-tag blue">Observation M → 385380006</span>
+          <span class="ex-tag yellow">LOINC 51971-4 (BRAF V600E)</span>
+        </div>
+      </div>
+
+      <!-- Card 3: Implant + adverse event -->
+      <div class="example-card">
+        <div class="ex-title">Device failure chain</div>
+        <div class="ex-input">"Cui centromedular Ender,
+degradare montaj"</div>
+        <div class="ex-arrow">↓ Multi-resource assembly</div>
+        <div class="ex-output">
+          <span class="ex-tag">Device (implant)</span>
+          <span class="ex-tag">DeviceUseStatement</span>
+          <span class="ex-tag red">AdverseEvent + causal link</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 6 · CLOSE                                             -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <section id="s6" class="slide slide-darker">
+    <div class="glow-line" style="opacity:.4;"></div>
+
+    <div class="eyebrow anim-in" style="text-align:center;">NEXT — IF WE HAD ONE MORE WEEK</div>
+
+    <div class="roadmap-row anim-in">
+      <div class="rmap-item">
+        <span class="rmap-num">01</span>
+        <span class="rmap-text">Multi-tenant web UI — clinic onboarding in &lt; 48 hours</span>
+      </div>
+      <div class="rmap-item">
+        <span class="rmap-num">02</span>
+        <span class="rmap-text">SMART on FHIR OAuth — cross-border patient identity</span>
+      </div>
+      <div class="rmap-item">
+        <span class="rmap-num">03</span>
+        <span class="rmap-text">Pillar 2 de-identification — k-anonymity for research data reuse</span>
+      </div>
+    </div>
+
+    <div class="divider anim-in" style="margin:40px auto 0;"></div>
+
+    <div class="close-tagline anim-in">
+      EHDS compliance is not a choice.
+      <span class="accent-txt">It's a countdown.</span>
+    </div>
+
+    <div class="final-line anim-in" style="margin-top:28px;">
+      HackTM 2026 <span>·</span> Best AI <span>·</span> Best Product Innovation <span>·</span> EHDS Platform
+    </div>
+  </section>
+
+</div><!-- /deck -->
+
+<script>
+  const slides  = Array.from(document.querySelectorAll('.slide'));
+  const dots    = Array.from(document.querySelectorAll('.dot'));
+  const counter = document.getElementById('slide-counter');
+  let current = 0;
+  let transitioning = false;
+
+  function goTo(idx) {
+    if (transitioning || idx === current) return;
+    transitioning = true;
+
+    const prev = current;
+    current = Math.max(0, Math.min(slides.length - 1, idx));
+
+    slides[prev].classList.add('exit');
+    slides[prev].classList.remove('active');
+    dots[prev].classList.remove('active');
+
+    // Pause video when leaving slide 3
+    const vid = document.getElementById('demo-video');
+    if (prev === 2 && vid) vid.pause();
+
+    setTimeout(() => {
+      slides[prev].classList.remove('exit');
+      transitioning = false;
+    }, 350);
+
+    slides[current].classList.add('active');
+    dots[current].classList.add('active');
+    counter.textContent = `${current + 1} / ${slides.length}`;
+  }
+
+  function changeSlide(dir) {
+    goTo(current + dir);
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault(); changeSlide(1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault(); changeSlide(-1);
+    }
+  });
+
+  // Touch/swipe support
+  let touchStartX = 0;
+  document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 50) changeSlide(dx < 0 ? 1 : -1);
+  });
+
+  // Click anywhere on slide to advance (excluding buttons and nav)
+  document.getElementById('deck').addEventListener('click', e => {
+    if (e.target.closest('button') || e.target.closest('#nav') ||
+        e.target.closest('video') || e.target.closest('.video-wrapper')) return;
+    changeSlide(1);
+  });
+</script>
+</body>
+</html>
