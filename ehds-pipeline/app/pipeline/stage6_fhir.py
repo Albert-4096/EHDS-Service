@@ -448,7 +448,7 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
             code=CodeableConcept(text=proc.name),
         )
         if proc.date:
-            p.performedDateTime = proc.date
+            p.occurrenceDateTime = proc.date
         if proc.body_site:
             site = _body_site_concept(proc.body_site)
             if site:
@@ -456,7 +456,7 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
         if proc.performed_age:
             from fhir.resources.age import Age
 
-            p.performedAge = Age(value=proc.performed_age)
+            p.occurrenceAge = Age(value=proc.performed_age)
         return p
 
     if record.epicriza:
@@ -551,7 +551,7 @@ def build_fhir_resources(record: MergedRecord) -> List[DomainResource]:
             ),
         )
         if tx.date:
-            tx_proc.performedDateTime = tx.date
+            tx_proc.occurrenceDateTime = tx.date
         resources.append(tx_proc)
 
     # --- Appointment + CarePlan (HP-09) ---
