@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script async src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
 <style>
   /* ── Reset & Base ─────────────────────────────────────────────── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -590,6 +592,36 @@
     .example-grid { grid-template-columns: 1fr; }
     .xform-wrap { flex-direction: column; }
   }
+
+  /* ─────────────────────────────────────────────────────────────── */
+  /*  SLIDE s_eu – EU CENTRALIZATION ANIMATION                       */
+  /* ─────────────────────────────────────────────────────────────── */
+  #s_eu { padding: 0; }
+  #eu-wrap { position: absolute; inset: 0; overflow: hidden; }
+  #eu-svg  { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #eu-overlay {
+    position: absolute; inset: 0; z-index: 10;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: space-between;
+    padding: 68px 80px 52px; pointer-events: none;
+  }
+  .eu-top { text-align: center; }
+  .eu-bottom { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .eu-phase-track { display: flex; gap: 10px; }
+  .eu-phase-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(255,255,255,.2);
+    transition: background .4s, transform .4s;
+  }
+  .eu-phase-dot.active { background: var(--accent-bright); transform: scale(1.5); }
+  #eu-eyebrow  { transition: opacity .35s ease, color .5s ease; }
+  #eu-headline { transition: opacity .35s ease; max-width: 700px; margin: 10px auto 0; }
+  #eu-subtext  { transition: opacity .35s ease; margin-top: 8px; }
+  #eu-bottom-label {
+    font-size: 11px; font-weight: 700; letter-spacing: .1em;
+    color: rgba(255,255,255,.28); text-transform: uppercase;
+    transition: opacity .35s ease;
+  }
 </style>
 </head>
 <body>
@@ -600,7 +632,7 @@
   <div class="brand-name">EHDS <span>Platform</span></div>
 </div>
 
-<div id="slide-counter">1 / 6</div>
+<div id="slide-counter">1 / 7</div>
 
 <!-- Prev / Next buttons -->
 <button id="btn-prev" onclick="changeSlide(-1)" aria-label="Previous">&#8592;</button>
@@ -614,6 +646,7 @@
   <div class="dot" onclick="goTo(3)"></div>
   <div class="dot" onclick="goTo(4)"></div>
   <div class="dot" onclick="goTo(5)"></div>
+  <div class="dot" onclick="goTo(6)"></div>
 </div>
 
 <div id="deck">
@@ -726,6 +759,32 @@
       <span class="cbadge">UCUM</span>
       <span class="cbadge">EEHRxF</span>
       <span class="cbadge">SHA-256 Provenance</span>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE s_eu · EU CENTRALIZATION ANIMATION                    -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <section id="s_eu" class="slide slide-dark">
+    <div class="glow-line" style="background:linear-gradient(90deg,transparent,rgba(58,123,213,.6),rgba(91,155,255,.8),transparent);"></div>
+    <div id="eu-wrap">
+      <svg id="eu-svg"></svg>
+      <div id="eu-overlay">
+        <div class="eu-top">
+          <div class="eyebrow" id="eu-eyebrow" style="color:#FF8A80;">FRAGMENTED HEALTHCARE</div>
+          <div class="h2" id="eu-headline">42,000+ isolated systems across Romania</div>
+          <div class="body-sm" id="eu-subtext">Each hospital its own island — incompatible data, zero interoperability</div>
+        </div>
+        <div class="eu-bottom">
+          <div class="eu-phase-track">
+            <div class="eu-phase-dot active"></div>
+            <div class="eu-phase-dot"></div>
+            <div class="eu-phase-dot"></div>
+            <div class="eu-phase-dot"></div>
+          </div>
+          <div id="eu-bottom-label">Romania · Decentralized</div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -922,9 +981,9 @@ degradare montaj"</div>
     slides[prev].classList.remove('active');
     dots[prev].classList.remove('active');
 
-    // Pause video when leaving slide 3
+    // Pause video when leaving demo slide (now index 3 after adding s_eu)
     const vid = document.getElementById('demo-video');
-    if (prev === 2 && vid) vid.pause();
+    if (prev === 3 && vid) vid.pause();
 
     setTimeout(() => {
       slides[prev].classList.remove('exit');
@@ -962,6 +1021,230 @@ degradare montaj"</div>
         e.target.closest('video') || e.target.closest('.video-wrapper')) return;
     changeSlide(1);
   });
+
+  // Initialise counter with actual slide count
+  counter.textContent = `1 / ${slides.length}`;
+
+  // ── EU Centralization Animation ─────────────────────────────────────
+  (function () {
+    'use strict';
+
+    // ISO 3166-1 numeric IDs for all 27 EU member states
+    const EU_IDS = new Set([40,56,100,191,196,203,208,233,246,250,276,300,348,372,380,428,440,442,470,528,616,620,642,703,705,724,752]);
+
+    const RO_HOSPITALS = [
+      {lon:26.10,lat:44.43},{lon:23.59,lat:46.77},{lon:21.23,lat:45.75},
+      {lon:27.59,lat:47.16},{lon:28.65,lat:44.18},{lon:25.61,lat:45.65},
+      {lon:23.79,lat:44.32},{lon:28.05,lat:45.43},{lon:24.15,lat:45.80},
+      {lon:26.03,lat:44.94}
+    ];
+
+    const EU_HOSPITALS = [
+      {lon:2.35,lat:48.87},{lon:13.40,lat:52.52},{lon:-3.70,lat:40.42},
+      {lon:12.49,lat:41.90},{lon:21.01,lat:52.23},{lon:4.90,lat:52.37},
+      {lon:14.43,lat:50.08},{lon:16.37,lat:48.21},{lon:19.05,lat:47.50},
+      {lon:-9.14,lat:38.72},{lon:4.35,lat:50.85},{lon:18.07,lat:59.33},
+      {lon:23.73,lat:37.98},{lon:26.10,lat:44.43}
+    ];
+
+    const PALETTE = [
+      '#FF6B6B','#F4B97A','#FFE566','#4ECDC4','#A8E6CF',
+      '#7B68EE','#DDA0DD','#98D8C8','#F8B195','#C06C84',
+      '#B8E994','#FFA07A','#87CEEB','#DEB887'
+    ];
+
+    const RO_UNIFIED = '#FF3333';
+    const EU_UNIFIED = '#5B9BFF';
+
+    let worldData = null, svgBuilt = false, animRunning = false;
+    let roLayer, euLayer, roIcons = [], euIcons = [];
+    let timers = [], retryT = null;
+
+    function sched(fn, ms) { timers.push(setTimeout(fn, ms)); }
+    function clearAll() { timers.forEach(clearTimeout); timers = []; if (retryT) { clearTimeout(retryT); retryT = null; } }
+
+    function setText(ey, hl, sub, eyCol, bot) {
+      ['eu-eyebrow','eu-headline','eu-subtext','eu-bottom-label'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.opacity = '0';
+      });
+      setTimeout(() => {
+        const $ey = document.getElementById('eu-eyebrow');
+        const $hl = document.getElementById('eu-headline');
+        const $su = document.getElementById('eu-subtext');
+        const $bl = document.getElementById('eu-bottom-label');
+        if ($ey) { $ey.textContent = ey; $ey.style.color = eyCol || '#FF8A80'; $ey.style.opacity = '1'; }
+        if ($hl) { $hl.innerHTML = hl; $hl.style.opacity = '1'; }
+        if ($su) { $su.textContent = sub; $su.style.opacity = '1'; }
+        if ($bl) { $bl.textContent = bot || ''; $bl.style.opacity = '1'; }
+      }, 360);
+    }
+
+    function setPhase(n) {
+      document.querySelectorAll('.eu-phase-dot').forEach((d, i) => d.classList.toggle('active', i === n));
+    }
+
+    function makeIcon(parent, x, y, color, r) {
+      const g = parent.append('g').attr('transform', `translate(${x},${y})`).attr('opacity', 0);
+      g.append('circle').attr('r', r + 11).attr('fill', color).attr('class', 'h-glow').attr('opacity', 0.15);
+      g.append('circle').attr('r', r).attr('fill', color)
+        .attr('stroke', 'rgba(255,255,255,0.75)').attr('stroke-width', 1.5).attr('class', 'h-circle');
+      const arm = r * 0.30, len = r * 0.70;
+      g.append('rect').attr('x', -arm/2).attr('y', -len/2).attr('width', arm).attr('height', len).attr('rx', arm*0.4).attr('fill', 'white');
+      g.append('rect').attr('x', -len/2).attr('y', -arm/2).attr('width', len).attr('height', arm).attr('rx', arm*0.4).attr('fill', 'white');
+      return g;
+    }
+
+    function buildScenes() {
+      const el = document.getElementById('eu-svg');
+      el.innerHTML = '';
+      const W = el.clientWidth  || window.innerWidth;
+      const H = el.clientHeight || window.innerHeight;
+      const svg = d3.select('#eu-svg');
+      const features = topojson.feature(worldData, worldData.objects.countries).features;
+
+      /* ── Romania view ── */
+      const rP = d3.geoMercator().scale(2750).center([24.5, 45.9]).translate([W * 0.5, H * 0.52]);
+      const rPath = d3.geoPath().projection(rP);
+      roLayer = svg.append('g').attr('opacity', 0);
+      const ROneighbors = new Set([804, 498, 688, 100, 348, 703]);
+      roLayer.selectAll('path').data(features).enter().append('path')
+        .attr('d', rPath)
+        .attr('fill',   d => +d.id === 642 ? 'rgba(58,123,213,0.38)' : ROneighbors.has(+d.id) ? 'rgba(18,42,80,0.78)' : 'rgba(6,14,30,0.45)')
+        .attr('stroke', d => +d.id === 642 ? 'rgba(91,155,255,0.85)' : ROneighbors.has(+d.id) ? 'rgba(58,123,213,0.22)' : 'none')
+        .attr('stroke-width', d => +d.id === 642 ? 2.2 : 0.6);
+
+      roIcons = RO_HOSPITALS.map((c, i) => {
+        const [x, y] = rP([c.lon, c.lat]);
+        return makeIcon(roLayer, x, y, PALETTE[i % PALETTE.length], 14);
+      });
+
+      /* ── Europe view ── */
+      const eP = d3.geoMercator().scale(620).center([13, 52]).translate([W * 0.5, H * 0.5]);
+      const ePath = d3.geoPath().projection(eP);
+      euLayer = svg.append('g').attr('opacity', 0);
+      euLayer.selectAll('path').data(features).enter().append('path')
+        .attr('d', ePath)
+        .attr('fill',   d => EU_IDS.has(+d.id) ? 'rgba(58,123,213,0.28)' : 'rgba(8,20,44,0.68)')
+        .attr('stroke', d => EU_IDS.has(+d.id) ? 'rgba(91,155,255,0.40)' : 'rgba(255,255,255,0.04)')
+        .attr('stroke-width', d => EU_IDS.has(+d.id) ? 0.7 : 0.25);
+
+      euIcons = EU_HOSPITALS.map((c, i) => {
+        const [x, y] = eP([c.lon, c.lat]);
+        return makeIcon(euLayer, x, y, PALETTE[i % PALETTE.length], 10);
+      });
+
+      svgBuilt = true;
+    }
+
+    function showIcons(icons, stagger) {
+      icons.forEach((ic, i) => ic.transition().delay(i * stagger).duration(420).attr('opacity', 1));
+    }
+
+    function convergeColors(icons, color, stagger) {
+      icons.forEach((ic, i) => {
+        const d = i * stagger;
+        ic.select('.h-circle').transition().delay(d).duration(560).attr('fill', color);
+        ic.select('.h-glow').transition().delay(d).duration(560).attr('fill', color)
+          .attr('opacity', 0.42).transition().duration(520).attr('opacity', 0.18);
+      });
+    }
+
+    function resetState() {
+      if (roLayer) { roLayer.attr('opacity', 0); roIcons.forEach(ic => ic.attr('opacity', 0)); }
+      if (euLayer) { euLayer.attr('opacity', 0); euIcons.forEach(ic => ic.attr('opacity', 0)); }
+      roIcons.forEach((ic, i) => {
+        ic.select('.h-circle').attr('fill', PALETTE[i % PALETTE.length]);
+        ic.select('.h-glow').attr('fill', PALETTE[i % PALETTE.length]).attr('opacity', 0.15);
+      });
+      euIcons.forEach((ic, i) => {
+        ic.select('.h-circle').attr('fill', PALETTE[i % PALETTE.length]);
+        ic.select('.h-glow').attr('fill', PALETTE[i % PALETTE.length]).attr('opacity', 0.15);
+      });
+    }
+
+    function runAnimation() {
+      clearAll();
+      animRunning = true;
+      resetState();
+
+      /* Phase 0 — Romania, fragmented */
+      setPhase(0);
+      setText('FRAGMENTED HEALTHCARE', '42,000+ isolated systems<br/>across Romania',
+        'Each hospital its own island — incompatible data, zero interoperability',
+        '#FF8A80', 'Romania · Decentralized');
+      roLayer.transition().duration(750).attr('opacity', 1);
+      sched(() => showIcons(roIcons, 170), 550);
+
+      /* Phase 1 — Centralise Romania (t = 3.3s) */
+      sched(() => {
+        setPhase(1);
+        setText('CENTRALISING ROMANIA', 'One unified standard<br/>connecting every facility',
+          'EHDS Platform brings all hospitals onto a single FHIR infrastructure',
+          '#5B9BFF', 'Romania · Centralizing');
+        convergeColors(roIcons, RO_UNIFIED, 290);
+      }, 3300);
+
+      /* Phase 2 — Zoom out to Europe (t = 7.2s) */
+      sched(() => {
+        setPhase(2);
+        setText('SCALING TO EUROPE', '800M+ patients,<br/>27 member states',
+          'The same fragmentation — replicated at continental scale across the EU',
+          '#FF8A80', 'Europe · Decentralized');
+        roLayer.transition().duration(1000).attr('opacity', 0);
+        sched(() => {
+          euLayer.transition().duration(950).attr('opacity', 1);
+          sched(() => showIcons(euIcons, 115), 500);
+        }, 650);
+      }, 7200);
+
+      /* Phase 3 — Centralise EU (t = 11.8s) */
+      sched(() => {
+        setPhase(3);
+        setText('EHDS PLATFORM', 'One standard.<br/>All of Europe.',
+          'A unified health data infrastructure for the entire European Union — starting now',
+          '#2ECC8D', 'Europe · Unified');
+        convergeColors(euIcons, EU_UNIFIED, 185);
+      }, 11800);
+
+      /* Final celebration pulse (t = 15s) */
+      sched(() => {
+        euIcons.forEach((ic, i) =>
+          ic.select('.h-glow').transition().delay(i * 65).duration(500)
+            .attr('opacity', 0.55).transition().duration(700).attr('opacity', 0.18)
+        );
+      }, 15000);
+
+      /* Loop (t = 18s) */
+      sched(() => { animRunning = false; runAnimation(); }, 18000);
+    }
+
+    function stopAnimation() { clearAll(); animRunning = false; }
+
+    function tryStart() {
+      if (typeof d3 === 'undefined' || typeof topojson === 'undefined') {
+        retryT = setTimeout(tryStart, 200); return;
+      }
+      if (!worldData) {
+        fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+          .then(r => r.json())
+          .then(data => { worldData = data; buildScenes(); runAnimation(); })
+          .catch(() => { /* no map – text overlay still visible */ });
+        return;
+      }
+      if (!svgBuilt) buildScenes();
+      if (!animRunning) runAnimation();
+    }
+
+    /* Watch for the slide becoming active / inactive */
+    const euSlide = document.getElementById('s_eu');
+    if (euSlide) {
+      new MutationObserver(() => {
+        if (euSlide.classList.contains('active')) tryStart();
+        else stopAnimation();
+      }).observe(euSlide, { attributes: true, attributeFilter: ['class'] });
+    }
+  })();
 </script>
 </body>
 </html>
