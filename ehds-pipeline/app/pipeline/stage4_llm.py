@@ -75,7 +75,7 @@ class ImagingLLM(BaseModel):
     modality: str
     date: Optional[str] = None
     institution: Optional[str] = None
-    conclusion: str
+    conclusion: Optional[str] = None
     is_current_visit: bool = False
 
 
@@ -248,7 +248,7 @@ OUTPUT JSON SCHEMA — return exactly this structure, all keys present, unused a
   ],
   "imaging_results": [
     {"modality": "string", "date": "YYYY-MM-DD|null", "institution": "string|null",
-     "conclusion": "string", "is_current_visit": false}
+     "conclusion": "string|null", "is_current_visit": false}
   ],
   "transfusions": [
     {"blood_group": "string", "rh": "string", "product_type": "string",
