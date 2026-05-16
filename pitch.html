@@ -652,9 +652,44 @@
 <div id="deck">
 
   <!-- ═══════════════════════════════════════════════════════════ -->
-  <!-- SLIDE 1 · HOOK + PROBLEM                                    -->
+  <!-- SLIDE 1 · CLOSE (moved to opener)                           -->
   <!-- ═══════════════════════════════════════════════════════════ -->
-  <section id="s1" class="slide slide-dark active">
+  <section id="s6" class="slide slide-darker active">
+    <div class="glow-line" style="opacity:.4;"></div>
+
+    <div class="close-tagline anim-in">
+      EHDS compliance is not a choice.
+      <span class="accent-txt">It's a countdown.</span>
+    </div>
+
+    <div class="eyebrow anim-in" style="text-align:center;margin-top:40px;">NEXT — IF WE HAD ONE MORE WEEK</div>
+
+    <div class="roadmap-row anim-in">
+      <div class="rmap-item">
+        <span class="rmap-num">01</span>
+        <span class="rmap-text">Multi-tenant web UI — clinic onboarding in &lt; 48 hours</span>
+      </div>
+      <div class="rmap-item">
+        <span class="rmap-num">02</span>
+        <span class="rmap-text">SMART on FHIR OAuth — cross-border patient identity</span>
+      </div>
+      <div class="rmap-item">
+        <span class="rmap-num">03</span>
+        <span class="rmap-text">Pillar 2 de-identification — k-anonymity for research data reuse</span>
+      </div>
+    </div>
+
+    <div class="divider anim-in" style="margin:40px auto 0;"></div>
+
+    <div class="final-line anim-in" style="margin-top:28px;">
+      HackTM 2026 <span>·</span> Best AI <span>·</span> Best Product Innovation <span>·</span> EHDS Platform
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 2 · HOOK + PROBLEM                                    -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <section id="s1" class="slide slide-dark">
     <div class="glow-line"></div>
 
     <div class="s1-tag anim-in">REGULATION IN FORCE · MARCH 26, 2025</div>
@@ -926,41 +961,6 @@ degradare montaj"</div>
     </div>
   </section>
 
-  <!-- ═══════════════════════════════════════════════════════════ -->
-  <!-- SLIDE 6 · CLOSE                                             -->
-  <!-- ═══════════════════════════════════════════════════════════ -->
-  <section id="s6" class="slide slide-darker">
-    <div class="glow-line" style="opacity:.4;"></div>
-
-    <div class="eyebrow anim-in" style="text-align:center;">NEXT — IF WE HAD ONE MORE WEEK</div>
-
-    <div class="roadmap-row anim-in">
-      <div class="rmap-item">
-        <span class="rmap-num">01</span>
-        <span class="rmap-text">Multi-tenant web UI — clinic onboarding in &lt; 48 hours</span>
-      </div>
-      <div class="rmap-item">
-        <span class="rmap-num">02</span>
-        <span class="rmap-text">SMART on FHIR OAuth — cross-border patient identity</span>
-      </div>
-      <div class="rmap-item">
-        <span class="rmap-num">03</span>
-        <span class="rmap-text">Pillar 2 de-identification — k-anonymity for research data reuse</span>
-      </div>
-    </div>
-
-    <div class="divider anim-in" style="margin:40px auto 0;"></div>
-
-    <div class="close-tagline anim-in">
-      EHDS compliance is not a choice.
-      <span class="accent-txt">It's a countdown.</span>
-    </div>
-
-    <div class="final-line anim-in" style="margin-top:28px;">
-      HackTM 2026 <span>·</span> Best AI <span>·</span> Best Product Innovation <span>·</span> EHDS Platform
-    </div>
-  </section>
-
 </div><!-- /deck -->
 
 <script>
@@ -981,9 +981,9 @@ degradare montaj"</div>
     slides[prev].classList.remove('active');
     dots[prev].classList.remove('active');
 
-    // Pause video when leaving demo slide (now index 3 after adding s_eu)
+    // Pause video when leaving demo slide (index 4: s6→s1→s2→s_eu→s3)
     const vid = document.getElementById('demo-video');
-    if (prev === 3 && vid) vid.pause();
+    if (prev === 4 && vid) vid.pause();
 
     setTimeout(() => {
       slides[prev].classList.remove('exit');
