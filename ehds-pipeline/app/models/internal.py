@@ -37,7 +37,7 @@ class ImagingResult(BaseModel):
     modality: str              # "PET CT", "CT TAP", "RMN cerebral"
     date: Optional[DateType] = None
     institution: Optional[str] = None
-    conclusion: str
+    conclusion: Optional[str] = None
     is_current_visit: bool     # HP-12: True only if from this admission
 
 class TNMStaging(BaseModel):

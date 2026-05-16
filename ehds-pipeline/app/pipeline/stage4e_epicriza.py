@@ -37,7 +37,7 @@ class ImagingResultSchema(BaseModel):
     modality: str
     date: Optional[str] = None
     institution: Optional[str] = None
-    conclusion: str
+    conclusion: Optional[str] = None
     is_current_visit: bool = False
 
 
