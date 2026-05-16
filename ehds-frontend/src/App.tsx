@@ -3,6 +3,7 @@ import axios from 'axios';
 import { UploadDropzone } from './components/UploadDropzone';
 import { LoadingScreen } from './components/LoadingScreen';
 import { ResultView } from './components/ResultView';
+import { AnimatedBackground } from './components/AnimatedBackground';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -32,7 +33,9 @@ function TopBar({ step, role, setRole }: { step: AppState; role: Role; setRole: 
   return (
     <div style={{
       height: 56,
-      background: '#fff',
+      background: 'rgba(255,255,255,0.82)',
+      backdropFilter: 'blur(14px)',
+      WebkitBackdropFilter: 'blur(14px)',
       borderBottom: `1px solid ${BORDER}`,
       display: 'flex',
       alignItems: 'center',
@@ -152,7 +155,8 @@ function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F5F7FA', fontFamily: '"Inter", -apple-system, sans-serif', color: TEXT, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', fontFamily: '"Inter", -apple-system, sans-serif', color: TEXT, display: 'flex', flexDirection: 'column' }}>
+      <AnimatedBackground />
       <TopBar step={appState} role={role} setRole={setRole} />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

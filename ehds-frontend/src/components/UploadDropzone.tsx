@@ -101,7 +101,9 @@ export function UploadDropzone({ onFileSelect }: UploadDropzoneProps) {
           style={{
             marginTop: 28,
             position: 'relative',
-            background: isDragActive ? '#fff' : '#FAFBFD',
+            background: isDragActive ? 'rgba(255,255,255,0.92)' : 'rgba(250,251,253,0.65)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
             border: `2px dashed ${isDragActive ? ACCENT : '#C9D4E2'}`,
             borderRadius: 10,
             padding: '56px 40px',
@@ -161,7 +163,10 @@ export function UploadDropzone({ onFileSelect }: UploadDropzoneProps) {
             onClick={handleSampleClick}
             disabled={sampleLoading}
             style={{
-              width: '100%', textAlign: 'left', padding: '14px 16px', background: '#fff',
+              width: '100%', textAlign: 'left', padding: '14px 16px',
+              background: 'rgba(255,255,255,0.75)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
               border: `1px solid ${BORDER}`, borderRadius: 8,
               cursor: sampleLoading ? 'wait' : 'pointer',
               display: 'flex', alignItems: 'center', gap: 14,
@@ -190,7 +195,10 @@ export function UploadDropzone({ onFileSelect }: UploadDropzoneProps) {
 
         {/* Compliance footer */}
         <div style={{
-          marginTop: 28, padding: '14px 18px', background: '#fff',
+          marginTop: 28, padding: '14px 18px',
+          background: 'rgba(255,255,255,0.75)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
           border: `1px solid ${BORDER}`, borderRadius: 8,
           display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: MUTED,
         }}>

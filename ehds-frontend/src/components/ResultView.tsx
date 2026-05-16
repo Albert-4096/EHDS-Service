@@ -79,7 +79,7 @@ export function ResultView({ bundleData, onReset, isAnonymized, originalFile, ro
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'afade-in .4s ease' }}>
       {/* Result header */}
-      <div style={{ background: '#fff', borderBottom: `1px solid ${BORDER}`, padding: '18px 56px 0' }}>
+      <div style={{ background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', borderBottom: `1px solid ${BORDER}`, padding: '18px 56px 0' }}>
 
         {/* Compliance banner */}
         <div style={{
@@ -232,7 +232,9 @@ function PillButton({
       padding: small ? '7px 14px' : '11px 22px',
       borderRadius: 6,
       border: primary ? 'none' : `1px solid ${BORDER}`,
-      background: primary ? BLUE : '#fff',
+      background: primary ? BLUE : 'rgba(255,255,255,0.75)',
+      backdropFilter: primary ? undefined : 'blur(8px)',
+      WebkitBackdropFilter: primary ? undefined : 'blur(8px)',
       color: primary ? '#fff' : TEXT,
       fontFamily: 'inherit', fontSize: small ? 13 : 14, fontWeight: 500,
       cursor: 'pointer',

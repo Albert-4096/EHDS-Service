@@ -14,7 +14,7 @@
 }
 
 body {
-  background-color: #F5F7FA;
+  background: linear-gradient(160deg, #E8EFF8 0%, #F5F7FA 50%, #EDF5F0 100%) fixed;
   color: #1A2433;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   margin: 0;
