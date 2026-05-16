@@ -192,6 +192,72 @@ CRITICAL RULES:
 11. Blood group: "A", "B", "AB", or "O" only. Rh factor: "pozitiv" | "negativ" | "+" | "-".
 12. discharge_status: exact Romanian term (vindecat / ameliorat / staționar / agravat / decedat).
 13. physical_exam: keys are organ/system names, values are the finding text.
+
+OUTPUT JSON SCHEMA — return exactly this structure, all keys present, unused arrays as []:
+{
+  "document_type": "DOC_HDR | DOC_BIS",
+  "patient_name": "string | null",
+  "cnp": "13-digit string | null",
+  "birth_date": "string as written | null",
+  "sex": "M | F | null",
+  "age": "integer | null",
+  "blood_group": "A | B | AB | O | null",
+  "rh_factor": "pozitiv | negativ | + | - | null",
+  "address": "string | null",
+  "allergies": "string | null",
+  "fo_number": "string | null",
+  "contract_number": "string | null",
+  "admission_date": "string as written | null",
+  "discharge_date": "string as written | null",
+  "department": "string | null",
+  "attending_physician": "string | null",
+  "discharge_status": "vindecat | ameliorat | staționar | agravat | decedat | null",
+  "primary_diagnosis_text": "string | null",
+  "secondary_diagnoses_texts": ["string"],
+  "lab_date": "string | null",
+  "lab_results": [
+    {"test_name": "string", "test_abbreviation": "string|null", "value_raw": "string",
+     "unit_raw": "string|null", "flagged": false, "panel": "cbc|biochemistry|hormones|other"}
+  ],
+  "medications": [
+    {"medicament": "string", "doza": "string|null", "frecventa": "string|null",
+     "durata": "string|null", "dose_is_total": false, "raw": "string"}
+  ],
+  "next_appointment_datetime": "string | null",
+  "next_appointment_location": "string | null",
+  "ecog_score": "integer 0-4 | null",
+  "tnm_staging": "raw string e.g. pT2N1M0 | null",
+  "oncology_cycle": "integer | null",
+  "oncology_regimen": "string | null",
+  "molecular_markers": {"BRAF": "V600E"},
+  "response_status": "RC | RP | BS | PD | null",
+  "chief_complaint": ["string"],
+  "physical_exam": {"stare_generala": "string|null", "ta": "string|null", "fc": "string|null"},
+  "clinical_status": "string | null",
+  "treatment_narrative": "string | null",
+  "administered_in_hospital": ["string"],
+  "family_history": "string | null",
+  "personal_medical_history": ["string"],
+  "history_timeline": [
+    {"date": "YYYY-MM-DD|null", "event_type": "diagnosis|surgery|treatment|imaging|lab|other",
+     "description": "string"}
+  ],
+  "past_procedures": [
+    {"description": "string", "date": "YYYY-MM-DD|null", "performed_age": "string|null",
+     "anatomical_site": "string|null", "implants_inserted": ["string"], "implants_removed": ["string"]}
+  ],
+  "imaging_results": [
+    {"modality": "string", "date": "YYYY-MM-DD|null", "institution": "string|null",
+     "conclusion": "string", "is_current_visit": false}
+  ],
+  "transfusions": [
+    {"blood_group": "string", "rh": "string", "product_type": "string",
+     "bag_number": "string", "date": "string|null"}
+  ],
+  "readmission_required": "boolean | null",
+  "prescription_issued": "boolean | null",
+  "sick_leave_issued": "boolean | null"
+}
 """
 
 # ──────────────────────────────────────────────────────────

@@ -9,6 +9,13 @@ from app.utils.logger import get_logger
 logger = get_logger()
 T = TypeVar("T", bound=BaseModel)
 
+# Prompt caching beta header — required by Anthropic API to activate KV cache.
+_CACHE_HEADERS = {"anthropic-beta": "prompt-caching-2024-07-31"}
+
+###
+# ATTENTION
+# 1
+
 # Fallback models for OpenRouter. Primary model is settings.llm_model;
 # on 429/404 we walk down this list.
 OPENROUTER_FALLBACKS = [
@@ -23,6 +30,24 @@ class LLMParseError(Exception):
     pass
 
 
+def _log_cache_usage(completion) -> None:
+    """Log prompt-cache hit/miss stats from a raw Anthropic Message."""
+    usage = getattr(completion, "usage", None)
+    if usage is None:
+        return
+    read = getattr(usage, "cache_read_input_tokens", 0) or 0
+    created = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    total_in = getattr(usage, "input_tokens", 0) or 0
+    total_out = getattr(usage, "output_tokens", 0) or 0
+    if read or created:
+        logger.info(
+            f"Cache — read: {read} tok, created: {created} tok | "
+            f"total in: {total_in}, out: {total_out}"
+        )
+    else:
+        logger.debug(f"Cache miss — in: {total_in}, out: {total_out}")
+
+
 class LLMClient:
     def __init__(self):
         self.model = settings.llm_model
@@ -30,10 +55,13 @@ class LLMClient:
 
         if settings.anthropic_api_key:
             self._provider = "anthropic"
+            raw = AsyncAnthropic(api_key=settings.anthropic_api_key)
             self.client = instructor.from_anthropic(
-                AsyncAnthropic(api_key=settings.anthropic_api_key),
+                raw,
                 mode=instructor.Mode.ANTHROPIC_JSON,
             )
+            # Register hook to log cache stats on every Anthropic completion.
+            self.client.on("completion:response", _log_cache_usage)
         elif settings.openrouter_api_key:
             self._provider = "openrouter"
             self.client = instructor.from_openai(
@@ -73,9 +101,18 @@ class LLMClient:
                 response = await self.client.messages.create(
                     model=self.model,
                     max_tokens=tokens,
-                    system=system_prompt,
+                    # System prompt as a cached content block. The Anthropic KV cache
+                    # stores this across calls with a 5-minute TTL — cached tokens cost
+                    # ~10% of normal input tokens. Instructor appends its own JSON
+                    # instruction as a second, non-cached block, which is correct.
+                    system=[{
+                        "type": "text",
+                        "text": system_prompt,
+                        "cache_control": {"type": "ephemeral"},
+                    }],
                     messages=[{"role": "user", "content": text}],
                     response_model=schema,
+                    extra_headers=_CACHE_HEADERS,
                 )
                 logger.info("Successfully extracted structured data from LLM.")
                 return response

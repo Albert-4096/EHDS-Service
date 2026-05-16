@@ -2,6 +2,8 @@ import { useState } from 'react';
 import JsonView from '@uiw/react-json-view';
 import { darkTheme } from '@uiw/react-json-view/dark';
 import { FHIRSummaryPanel } from './FHIRSummaryPanel';
+import type { Role } from '../App';
+import { ROLES } from '../App';
 
 const BLUE   = '#0F2A4A';
 const ACCENT = '#3A7BD5';
@@ -15,6 +17,7 @@ interface ResultViewProps {
   onReset: () => void;
   isAnonymized: boolean;
   originalFile?: File | null;
+  role?: Role;
 }
 
 type Tab = 'summary' | 'json';
@@ -39,8 +42,9 @@ function encounterDates(bundle: any): string {
     : `From ${fmt(period.start)}`;
 }
 
-export function ResultView({ bundleData, onReset, isAnonymized, originalFile }: ResultViewProps) {
+export function ResultView({ bundleData, onReset, isAnonymized, originalFile, role = 'doctor' }: ResultViewProps) {
   const [tab, setTab] = useState<Tab>('summary');
+  const roleInfo = ROLES.find(r => r.id === role)!;
 
   const handleDownloadJSON = () => {
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(bundleData, null, 2));
@@ -104,6 +108,36 @@ export function ResultView({ bundleData, onReset, isAnonymized, originalFile }: 
           <span style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 12, color: OK, fontWeight: 600 }}>✓ READY</span>
         </div>
 
+        {/* Access level indicator */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16,
+          padding: '9px 14px',
+          background: roleInfo.color + '0D',
+          border: `1px solid ${roleInfo.color}30`,
+          borderRadius: 8,
+        }}>
+          <div style={{
+            width: 8, height: 8, borderRadius: 4, background: roleInfo.color, flexShrink: 0,
+          }} />
+          <span style={{ fontSize: 12, color: roleInfo.color, fontWeight: 600 }}>
+            {roleInfo.label}
+          </span>
+          <span style={{ fontSize: 12, color: MUTED }}>—</span>
+          <span style={{ fontSize: 12, color: MUTED }}>
+            {role === 'doctor'
+              ? 'Full clinical record access · all sections visible'
+              : role === 'analyst'
+              ? 'Lab & diagnostic access · patient identifiers and prescriptions restricted'
+              : 'Aggregate research access · individual records and identifiers not accessible'}
+          </span>
+          <span style={{
+            marginLeft: 'auto', fontSize: 11, fontFamily: '"IBM Plex Mono", monospace',
+            fontWeight: 600, color: roleInfo.color,
+            background: roleInfo.color + '18',
+            padding: '2px 8px', borderRadius: 10,
+          }}>{roleInfo.access}</span>
+        </div>
+
         {/* Title row + actions */}
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, paddingBottom: 16 }}>
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -139,7 +173,7 @@ export function ResultView({ bundleData, onReset, isAnonymized, originalFile }: 
       {/* Tab content */}
       {tab === 'summary' ? (
         <div style={{ flex: 1, overflow: 'auto', padding: '28px 56px 48px' }}>
-          <FHIRSummaryPanel bundle={bundleData} />
+          <FHIRSummaryPanel bundle={bundleData} role={role} />
         </div>
       ) : (
         <div style={{ flex: 1, overflow: 'auto', padding: '24px 56px 40px' }}>

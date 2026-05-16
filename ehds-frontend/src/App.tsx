@@ -12,9 +12,17 @@ const MUTED  = '#5B6878';
 const BORDER = '#E5E9F0';
 const TEXT   = '#1A2433';
 
+export type Role = 'doctor' | 'analyst' | 'statistician';
+
+export const ROLES: { id: Role; label: string; color: string; access: string }[] = [
+  { id: 'doctor',       label: 'Doctor',       color: '#0F2A4A', access: 'Full Access' },
+  { id: 'analyst',      label: 'Lab Analyst',  color: '#0D6E5A', access: 'Lab Access' },
+  { id: 'statistician', label: 'Statistician', color: '#6D4ED8', access: 'Aggregate' },
+];
+
 type AppState = 'upload' | 'loading' | 'result' | 'error';
 
-function TopBar({ step }: { step: AppState }) {
+function TopBar({ step, role, setRole }: { step: AppState; role: Role; setRole: (r: Role) => void }) {
   const crumbs =
     step === 'upload'  ? ['Conversions', 'New upload'] :
     step === 'loading' ? ['Conversions', 'Processing…'] :
@@ -29,7 +37,7 @@ function TopBar({ step }: { step: AppState }) {
       display: 'flex',
       alignItems: 'center',
       padding: '0 28px',
-      gap: 24,
+      gap: 16,
       flexShrink: 0,
       position: 'sticky',
       top: 0,
@@ -45,6 +53,9 @@ function TopBar({ step }: { step: AppState }) {
         <span>EHDS Platform</span>
       </div>
 
+      {/* Divider */}
+      <div style={{ width: 1, height: 20, background: BORDER }} />
+
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: MUTED }}>
         {crumbs.map((c, i) => (
@@ -53,6 +64,41 @@ function TopBar({ step }: { step: AppState }) {
             <span style={i === crumbs.length - 1 ? { color: TEXT, fontWeight: 500 } : undefined}>{c}</span>
           </span>
         ))}
+      </div>
+
+      {/* Role selector — segmented control */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 2,
+        background: '#F1F4F9', borderRadius: 8, padding: '3px 4px',
+        border: `1px solid ${BORDER}`,
+        marginLeft: 8,
+      }}>
+        {ROLES.map(r => {
+          const active = role === r.id;
+          return (
+            <button
+              key={r.id}
+              onClick={() => setRole(r.id)}
+              title={`${r.label} — ${r.access}`}
+              style={{
+                padding: '4px 13px',
+                borderRadius: 5,
+                border: 'none',
+                background: active ? r.color : 'transparent',
+                color: active ? '#fff' : MUTED,
+                fontSize: 12,
+                fontWeight: active ? 600 : 500,
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                transition: 'background .18s, color .18s',
+                whiteSpace: 'nowrap',
+                letterSpacing: active ? -0.1 : 0,
+              }}
+            >
+              {r.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Right side badges */}
@@ -70,6 +116,7 @@ function App() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isAnonymized, setIsAnonymized] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [role, setRole] = useState<Role>('doctor');
 
   const handleFileSelect = async (file: File, usePillar2: boolean) => {
     setIsAnonymized(usePillar2);
@@ -106,7 +153,7 @@ function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#F5F7FA', fontFamily: '"Inter", -apple-system, sans-serif', color: TEXT, display: 'flex', flexDirection: 'column' }}>
-      <TopBar step={appState} />
+      <TopBar step={appState} role={role} setRole={setRole} />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {appState === 'upload' && (
@@ -123,6 +170,7 @@ function App() {
             onReset={resetApp}
             isAnonymized={isAnonymized}
             originalFile={uploadedFile}
+            role={role}
           />
         )}
 
