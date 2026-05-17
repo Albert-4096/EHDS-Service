@@ -11,3 +11,4 @@ skills-lock.json
 *.docx
 .claude
 .md*
+input_data
