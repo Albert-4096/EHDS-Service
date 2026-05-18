@@ -35,6 +35,14 @@ The system implements a **9-stage AI extraction pipeline** and supports the two 
 
 ---
 
+## Demo
+
+<div align="center">
+  <video src="assets/demo.mp4" controls width="100%"></video>
+</div>
+
+---
+
 ## Features
 
 - **Multi-format resilience** — Handles scanned PDFs (2009+), typed forms (2010-2011), and modern digital documents in a unified pipeline
