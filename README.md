@@ -283,7 +283,7 @@ See the [LICENSE](LICENSE) file for full terms.
 
 **Albert G.**
 - Email: [albert1024@proton.me](mailto:albert1024@proton.me)
-- Project: [EHDS-Service](https://github.com/<your-username>/EHDS-Service)
+- Project: [EHDS-Service](https://github.com/Albert-4096/EHDS-Service)
 
 For licensing inquiries, partnership proposals, or integration support — reach out directly.
 
